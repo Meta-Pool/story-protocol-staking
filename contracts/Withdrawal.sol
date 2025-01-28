@@ -26,7 +26,6 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
   address payable public stIP;
   // How much requested withdrawals are pending to complete
   uint public totalPendingWithdrawals;
-  uint8 public withdrawalsStartEpoch;
   uint8 public constant MAX_WITHDRAWALS_PER_USER = 4;
   uint32 public constant MAX_VALIDATORS_DISASSEMBLE_TIME = 90 days;
   uint32 public validatorsDisassembleTime;
@@ -92,6 +91,7 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
   }
 
   /// @notice Process pending withdrawal if there's enough IP
+  /// @param _request_id Position of the withdrawal in the userPendingWithdrawals array
   function completeWithdraw(uint _request_id) external {
     WithdrawRequest memory _pendingUserWithdraw = userPendingWithdrawals[msg.sender][_request_id];
 

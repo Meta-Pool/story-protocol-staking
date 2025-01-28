@@ -242,35 +242,6 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     return shares;
   }
 
-  function withdrawIP(uint _assets, address _receiver, address _owner) public returns (uint) {
-    if (_assets == 0) {
-      revert InvalidZeroAmount();
-    }
-
-    uint shares = previewWithdraw(_assets);
-    _withdraw(msg.sender, _receiver, _owner, _assets, shares);
-
-    IWIP(asset()).withdraw(_assets);
-    IERC20(asset()).safeTransfer(_receiver, _assets);
-
-    return shares;
-  }
-
-  /// @notice ERC4626 compatible withdraw.
-  function redeemIP(uint _shares, address _receiver, address _owner) public returns (uint) {
-    if (_shares == 0) {
-      revert InvalidZeroAmount();
-    }
-
-    uint assets = previewRedeem(_shares);
-    _withdraw(msg.sender, _receiver, _owner, assets, _shares);
-
-    IWIP(asset()).withdraw(assets);
-    IERC20(asset()).safeTransfer(_receiver, assets);
-
-    return assets;
-  }
-
   function burn(uint _shares) public override onlyFullyOperational {
     _burn(msg.sender, _shares);
   }
