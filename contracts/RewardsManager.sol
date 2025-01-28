@@ -6,10 +6,11 @@ import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
 import '@openzeppelin/contracts/interfaces/IERC20.sol';
 import '@openzeppelin/contracts/utils/Address.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+import './interfaces/IRewardsManager.sol';
 import './interfaces/IStakedIP.sol';
 
 /// @dev Receive rewards from the validators and re-stake them into the vault
-contract RewardsManager is Initializable, OwnableUpgradeable {
+contract RewardsManager is Initializable, IRewardsManager, OwnableUpgradeable {
   using Address for address payable;
   using SafeERC20 for IERC20;
 
@@ -35,18 +36,21 @@ contract RewardsManager is Initializable, OwnableUpgradeable {
     emit UpdateTreasury(msg.sender, _treasury);
   }
 
+  function getManagerAccrued() public view returns (uint rewards, uint treasuryFee) {
+    uint balance = address(this).balance;
+    treasuryFee = (balance * rewardsFeeBp) / ONE_HUNDRED;
+    rewards = balance - treasuryFee;
+  }
+
   /// @notice Send rewards to stIP and claim fees to treasury
   /// @dev Techincally safe to be called by anyone
   function sendRewardsAndFees() external {
-    address _stakedIP = stakedIP;
-    uint totalAmount = address(this).balance;
-    uint treasuryFee = (totalAmount * rewardsFeeBp) / ONE_HUNDRED;
-    uint netRewards = totalAmount - treasuryFee;
+    (uint rewards, uint treasuryFee) = getManagerAccrued();
 
-    IStakedIP(_stakedIP).injectRewards{ value: netRewards }();
+    IStakedIP(stakedIP).injectRewards{ value: rewards }();
     payable(treasury).sendValue(treasuryFee);
 
-    emit SendRewards(msg.sender, netRewards);
+    emit SendRewards(msg.sender, rewards);
     emit SendFees(msg.sender, treasuryFee);
   }
 }

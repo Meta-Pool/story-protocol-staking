@@ -15,6 +15,7 @@ import './interfaces/IStakedIP.sol';
 import './interfaces/IStakedIPVaultOperations.sol';
 import './interfaces/IWIP.sol';
 import './interfaces/IWithdrawal.sol';
+import './interfaces/IRewardsManager.sol';
 
 /// @notice [FullyOperational] When is NOT fully operational, users cannot:
 /// 1) mint, 2) deposit, 3) withdraw nor 4) redeem.
@@ -182,7 +183,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
 
   /// @dev Assets increases as rewards are received by rewardsManager and later re-staked burning his shares
   function totalAssets() public view override returns (uint) {
-    return totalUnderlying + rewardsManager.balance;
+    (uint rewards, ) = IRewardsManager(rewardsManager).getManagerAccrued();
+    return totalUnderlying + rewards;
   }
 
   function injectRewards() external payable {
