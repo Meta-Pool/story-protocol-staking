@@ -19,7 +19,6 @@ import './interfaces/IWithdrawal.sol';
 /// @notice [FullyOperational] When is NOT fully operational, users cannot:
 /// 1) mint, 2) deposit, 3) withdraw nor 4) redeem.
 
-// TODO: Fixed period for all users. Updatable
 contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, IStakedIP {
   using Address for address payable;
   using SafeERC20 for IERC20;
@@ -34,8 +33,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
   address public withdrawal;
   bool public fullyOperational;
 
-  event Stake(address _caller, bytes _validatorUncmpPubkey, uint _amount);
-  event Unstake(address _caller, bytes _validatorUncmpPubkey, uint _amount);
+  event Stake(address _caller, bytes indexed _validator, uint _delegation_id, uint _amount, bytes _extraData);
+  event Unstake(address _caller, bytes indexed _validator, uint _amount, uint _delegation_id, bytes _extraData);
   event UpdateMinDepositAmount(address _caller, uint _new);
   event UpdateOperator(address _caller, address _newOperator);
   event UpdateContractOperation(address _caller, bool _newValue);
@@ -325,26 +324,39 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
   }
 
   /// @notice Operator function to stake IP into the validator
+  /// @param _validatorUncmpPubkey Validator uncompressed public key
+  /// @param _amount Amount of IP to stake
+  /// @param _period Enum staking period (flexible, short, medium, long)
+  /// @param _extraData Additional data for the staking contract
+  /// @return delegation_id The delegation id of the staked IP. Always 0 for flexible staking. Unique id for fixed staking
   function stake(
     bytes calldata _validatorUncmpPubkey,
-    uint _amount
-  ) external onlyFullyOperational onlyOperator validatorExists(_validatorUncmpPubkey) {
+    uint _amount,
+    IIPTokenStaking.StakingPeriod _period,
+    bytes calldata _extraData
+  ) external onlyFullyOperational onlyOperator validatorExists(_validatorUncmpPubkey) returns (uint delegation_id) {
     IIPTokenStaking _ipTokenStaking = IIPTokenStaking(ipTokenStaking);
 
-    _ipTokenStaking.stake{ value: _amount }(
+    delegation_id = _ipTokenStaking.stake{ value: _amount }(
       delegatorUncmpPubkey,
       _validatorUncmpPubkey,
-      IIPTokenStaking.StakingPeriod.FLEXIBLE,
-      bytes('')
+      _period,
+      _extraData
     );
 
-    emit Stake(msg.sender, _validatorUncmpPubkey, _amount);
+    emit Stake(msg.sender, _validatorUncmpPubkey, delegation_id, _amount, _extraData);
   }
 
   /// @notice Operator function to unstake IP from the validator
+  /// @param _validatorUncmpPubkey Validator uncompressed public key
+  /// @param _amount Amount of IP to unstake
+  /// @param _delegation_id The delegation id of the staked IP. Always 0 for flexible staking
+  /// @param _extraData Additional data for the staking contract
   function unstake(
     bytes calldata _validatorUncmpPubkey,
-    uint _amount
+    uint _amount,
+    uint _delegation_id,
+    bytes calldata _extraData
   )
     external
     payable
@@ -356,18 +368,24 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     IIPTokenStaking(ipTokenStaking).unstake{ value: msg.value }(
       delegatorUncmpPubkey,
       _validatorUncmpPubkey,
-      0,
+      _delegation_id,
       _amount,
-      bytes('')
+      _extraData
     );
 
-    emit Unstake(msg.sender, _validatorUncmpPubkey, _amount);
+    emit Unstake(msg.sender, _validatorUncmpPubkey, _amount, _delegation_id, _extraData);
   }
 
+  /// @notice Operator function to redelegate IP from one validator to another
+  /// @param _oldValidatorUncmpPubkey Old validator uncompressed public key
+  /// @param _newValidatorUncmpPubkey New validator uncompressed public key
+  /// @param _amount Amount of IP to redelegate
+  /// @param _delegation_id The delegation id of the staked IP. Always 0 for flexible staking
   function redelegate(
     bytes calldata _oldValidatorUncmpPubkey,
     bytes calldata _newValidatorUncmpPubkey,
-    uint _amount
+    uint _amount,
+    uint _delegation_id
   )
     external
     payable
@@ -380,7 +398,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
       delegatorUncmpPubkey,
       _oldValidatorUncmpPubkey,
       _newValidatorUncmpPubkey,
-      0,
+      _delegation_id,
       _amount
     );
   }
