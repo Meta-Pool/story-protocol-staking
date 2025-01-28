@@ -16,38 +16,33 @@ struct WithdrawRequest {
 }
 
 /// @title Manage withdrawals from validators to users
-/// @notice Receive request for withdrawals from StakedIP and allow users to complete the withdrawals once the epoch is reached
+/// @notice Receive request for withdrawals from StakedIP and allow users to complete the withdrawals once the unlock timestamp is reached
 /// @dev As the disassemble of validators is delayed, this contract manage the pending withdraw from users to allow the to complet it once his unlockTimestamp is reached and if the contract has enough IP
-// The epochs are of one week
+
 contract Withdrawal is OwnableUpgradeable, IWithdrawal {
   using Address for address payable;
   using SafeERC20 for IERC20;
 
   address payable public stIP;
-  // How much we have pending to unstake to fulfill the withdrawals
+  // How much requested withdrawals are pending to complete
   uint public totalPendingWithdrawals;
-  mapping(address => WithdrawRequest) public pendingWithdraws;
   uint8 public withdrawalsStartEpoch;
+  uint8 public constant MAX_WITHDRAWALS_PER_USER = 4;
   uint32 public constant MAX_VALIDATORS_DISASSEMBLE_TIME = 90 days;
   uint32 public validatorsDisassembleTime;
+  mapping(address => WithdrawRequest[MAX_WITHDRAWALS_PER_USER]) public userPendingWithdrawals;
 
-  event RequestWithdraw(address indexed caller, uint amount, address receiver, uint unlockTimestamp);
-  event CompleteWithdraw(address indexed caller, uint amount, address receiver, uint unlockTimestamp);
+  event RequestWithdraw(address indexed user, uint id, uint amount, address receiver, uint unlockTimestamp);
+  event CompleteWithdraw(address indexed user, uint id, uint amount, address receiver, uint unlockTimestamp);
 
   error Unauthorized(address _caller, address _authorized);
-  error EpochNotReached(uint _currentEpoch, uint _unlockEpoch);
-  error UserDoesntHavePendingWithdraw(address _user);
   error NotEnoughIPtoStake(uint _requested, uint _available);
-  error WithdrawalsNotStarted(uint _currentEpoch, uint _startEpoch);
   error ClaimTooSoon(uint timestampUnlock);
-  error InvalidConfig(uint valueSent, uint maxValue);
-
-  modifier onlyStaking() {
-    if (msg.sender != stIP) revert Unauthorized(msg.sender, stIP);
-    _;
-  }
-
-  receive() external payable {}
+  error InvalidDisassembleTime(uint valueSent, uint maxValue);
+  error InvalidRequest();
+  error InvalidRequestId(address _user, uint _request_id);
+  error WithdrawAlreadeCompleted(address _user, uint _request_id);
+  error UserMaxWithdrawalsReached(address _user);
 
   function initialize(address payable _stIP) external initializer {
     __Ownable_init(msg.sender);
@@ -55,10 +50,24 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
     setValidatorsDisassembleTime(14 days);
   }
 
+  receive() external payable {}
+
+  modifier onlyStaking() {
+    if (msg.sender != stIP) revert Unauthorized(msg.sender, stIP);
+    _;
+  }
+
+  function _findEmptySlot(address _user) internal view returns (uint) {
+    for (uint i = 0; i < MAX_WITHDRAWALS_PER_USER; i++) {
+      if (userPendingWithdrawals[_user][i].amount == 0) return i;
+    }
+    revert UserMaxWithdrawalsReached(_user);
+  }
+
   /// @notice Set estimated time for validators disassemble
   function setValidatorsDisassembleTime(uint32 _disassembleTime) public onlyOwner {
     if (_disassembleTime > MAX_VALIDATORS_DISASSEMBLE_TIME)
-      revert InvalidConfig(_disassembleTime, MAX_VALIDATORS_DISASSEMBLE_TIME);
+      revert InvalidDisassembleTime(_disassembleTime, MAX_VALIDATORS_DISASSEMBLE_TIME);
     validatorsDisassembleTime = _disassembleTime;
   }
 
@@ -67,34 +76,41 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
   /// @param _amountOut IP amount to withdraw
   /// @param _user Owner of the withdrawal
   function requestWithdraw(uint _amountOut, address _user, address _receiver) external onlyStaking {
-    uint unlockTimestamp = block.timestamp + validatorsDisassembleTime;
+    if (_amountOut == 0) revert InvalidRequest();
 
-    pendingWithdraws[_user] = WithdrawRequest({
-      amount: pendingWithdraws[_user].amount + _amountOut,
+    uint unlockTimestamp = block.timestamp + validatorsDisassembleTime;
+    uint request_id = _findEmptySlot(_user);
+
+    userPendingWithdrawals[_user][request_id] = WithdrawRequest({
+      amount: _amountOut,
       unlockTimestamp: unlockTimestamp,
       receiver: _receiver
     });
     totalPendingWithdrawals += _amountOut;
 
-    emit RequestWithdraw(_user, _amountOut, _receiver, unlockTimestamp);
+    emit RequestWithdraw(_user, request_id, _amountOut, _receiver, unlockTimestamp);
   }
 
   /// @notice Process pending withdrawal if there's enough IP
-  function completeWithdraw() external {
-    WithdrawRequest memory _pendingUserWithdraw = pendingWithdraws[msg.sender];
+  function completeWithdraw(uint _request_id) external {
+    WithdrawRequest memory _pendingUserWithdraw = userPendingWithdrawals[msg.sender][_request_id];
 
-    if (_pendingUserWithdraw.amount == 0) revert UserDoesntHavePendingWithdraw(msg.sender);
+    if (_pendingUserWithdraw.amount == 0) {
+      revert InvalidRequestId(msg.sender, _request_id);
+    }
 
-    if (block.timestamp < _pendingUserWithdraw.unlockTimestamp)
+    if (block.timestamp < _pendingUserWithdraw.unlockTimestamp) {
       revert ClaimTooSoon(_pendingUserWithdraw.unlockTimestamp);
+    }
 
-    delete pendingWithdraws[msg.sender];
-    payable(_pendingUserWithdraw.receiver).sendValue(_pendingUserWithdraw.amount);
-
+    delete userPendingWithdrawals[msg.sender][_request_id];
     totalPendingWithdrawals -= _pendingUserWithdraw.amount;
+
+    payable(_pendingUserWithdraw.receiver).sendValue(_pendingUserWithdraw.amount);
 
     emit CompleteWithdraw(
       msg.sender,
+      _request_id,
       _pendingUserWithdraw.amount,
       _pendingUserWithdraw.receiver,
       _pendingUserWithdraw.unlockTimestamp
