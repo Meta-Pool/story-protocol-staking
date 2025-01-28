@@ -24,28 +24,36 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
   /// `validators` aka Starting Rotation 🏟️
   Validator[MAX_VALIDATORS] private validators;
   uint public validatorsLength;
+  mapping(bytes32 => bool) public validatorExist;
 
-  event InsertingValidator(bytes _validator);
-  event RemovingValidator(bytes _validator);
+  event InsertValidator(bytes _validator);
+  event RemoveValidator(bytes _validator);
   event ReplaceValidator(bytes _oldValidatorUncmpPubkey, bytes _newValidatorUcmpPubkey);
   event UpdateValidatorTargets(address _sender);
 
-  error ExpectingZeroAmount(uint256 _amount);
-  error InvalidDuplicates(bytes _invalidValidator);
+  error ValidatorAlreadyListed(bytes _invalidValidator);
   error ValidatorHasTargetPercent(Validator _validator);
   error InvalidLengthArray();
-  error InvalidIPDeposit();
   error ShouldBeOneHundred(uint256 _sumOfPercentages);
   error SizeMismatch();
   error ValidatorNotFount(bytes _validator);
   error ValidatorsEmptyList();
 
-  function initialize(Validator[MAX_VALIDATORS] memory _validators) public initializer {
+  function initialize(
+    bytes[] calldata _validatorsPubkey,
+    uint16[] calldata _validatorsStakePercent
+  ) public initializer {
     __Ownable_init(msg.sender);
+    bulkInsertValidators(_validatorsPubkey);
+    updateValidatorsTarget(_validatorsStakePercent);
+  }
 
-    _checkValidators(_validators);
-    validators = _validators;
-    validatorsLength = _validators.length;
+  modifier checkDuplicatedValidator(bytes memory _validatorUncmpPubkey) {
+    bytes32 _validatorPubkeyHash = keccak256(_validatorUncmpPubkey);
+    if (validatorExist[_validatorPubkeyHash]) {
+      revert ValidatorAlreadyListed(_validatorUncmpPubkey);
+    }
+    _;
   }
 
   // ***************************
@@ -53,7 +61,7 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
   // ***************************
 
   /// Update all the validators target stakes percent
-  function updateValidatorsTarget(uint16[] memory _targetStakesPercent) external onlyOwner {
+  function updateValidatorsTarget(uint16[] calldata _targetStakesPercent) public onlyOwner {
     uint _validatorsLength = validatorsLength;
     if (_targetStakesPercent.length != _validatorsLength) {
       revert SizeMismatch();
@@ -61,11 +69,16 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
 
     Validator[MAX_VALIDATORS] memory _validators = validators;
 
+    uint16 stakeSum;
     for (uint i = 0; i < _validatorsLength; ++i) {
       _validators[i].targetStakePercent = _targetStakesPercent[i];
+      stakeSum += _targetStakesPercent[i];
     }
 
-    _checkValidators(_validators);
+    if (stakeSum != ONE_HUNDRED) {
+      revert ShouldBeOneHundred(stakeSum);
+    }
+
     validators = _validators;
 
     emit UpdateValidatorTargets(msg.sender);
@@ -80,7 +93,7 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
   }
 
   /// @notice Insert validators in bul with zero target percent
-  function bulkInsertValidators(bytes[] memory _validatorsUncmpPubkey) external onlyOwner {
+  function bulkInsertValidators(bytes[] memory _validatorsUncmpPubkey) public onlyOwner {
     for (uint i = 0; i < _validatorsUncmpPubkey.length; ++i) {
       _insertValidator(_validatorsUncmpPubkey[i]);
     }
@@ -90,9 +103,12 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
   function replaceOneValidator(
     bytes memory _oldValidatorUncmpPubkey,
     bytes memory _newValidatorUcmpPubkey
-  ) external onlyOwner {
+  ) external onlyOwner checkDuplicatedValidator(_newValidatorUcmpPubkey) {
     uint256 _index = getValidatorIndex(_oldValidatorUncmpPubkey);
     validators[_index].uncmpPubkey = _newValidatorUcmpPubkey;
+
+    validatorExist[keccak256(_oldValidatorUncmpPubkey)] = false;
+    validatorExist[keccak256(_newValidatorUcmpPubkey)] = true;
 
     emit ReplaceValidator(_oldValidatorUncmpPubkey, _newValidatorUcmpPubkey);
   }
@@ -140,36 +156,11 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
     revert ValidatorNotFount(_validatorUncmpPubkey);
   }
 
-  /// @dev Check the validators array for duplicates and sum of percentages
-  function _checkValidators(Validator[MAX_VALIDATORS] memory _validators) private pure {
-    if (_validators.length > MAX_VALIDATORS) {
-      revert InvalidLengthArray();
-    }
-
-    uint16 stakeSum;
-    for (uint i = 0; i < _validators.length; ++i) {
-      stakeSum += _validators[i].targetStakePercent;
-
-      // Check for duplicates
-      // For small arrays (10) a nested loop is simpler and the gas cost is negligible compared to the cost of managing storage mappings
-      bytes32 pubkeyHash = keccak256(_validators[i].uncmpPubkey);
-      for (uint j = i + 1; j < _validators.length; ++j) {
-        if (pubkeyHash == keccak256(_validators[j].uncmpPubkey)) {
-          revert InvalidDuplicates(_validators[i].uncmpPubkey);
-        }
-      }
-    }
-
-    if (stakeSum != ONE_HUNDRED) {
-      revert ShouldBeOneHundred(stakeSum);
-    }
-  }
-
   function _removeValidator(bytes memory _validatorUncmpPubkey) private {
     uint _validatorsLength = validatorsLength;
 
     // Final validators array cannot be empty
-    if (_validatorsLength == 1) {
+    if (_validatorsLength <= 1) {
       revert ValidatorsEmptyList();
     }
 
@@ -188,12 +179,15 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
       delete validators[_index];
     }
 
+    validatorExist[keccak256(_validatorUncmpPubkey)] = false;
     validatorsLength--;
 
-    emit RemovingValidator(_validatorUncmpPubkey);
+    emit RemoveValidator(_validatorUncmpPubkey);
   }
 
-  function _insertValidator(bytes memory _validator) private {
+  function _insertValidator(
+    bytes memory _validatorUncmpPubkey
+  ) private checkDuplicatedValidator(_validatorUncmpPubkey) {
     Validator[MAX_VALIDATORS] memory _validators = validators;
     uint _validatorsLength = validatorsLength;
 
@@ -201,12 +195,10 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
       revert InvalidLengthArray();
     }
 
-    _validators[_validatorsLength].uncmpPubkey = _validator;
-    _checkValidators(_validators);
-
-    validators = _validators;
+    validatorExist[keccak256(_validatorUncmpPubkey)] = true;
+    _validators[_validatorsLength].uncmpPubkey = _validatorUncmpPubkey;
     validatorsLength++;
 
-    emit InsertingValidator(_validator);
+    emit InsertValidator(_validatorUncmpPubkey);
   }
 }
