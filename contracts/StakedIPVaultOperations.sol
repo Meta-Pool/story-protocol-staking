@@ -24,7 +24,7 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
   /// `validators` aka Starting Rotation 🏟️
   Validator[MAX_VALIDATORS] private validators;
   uint public validatorsLength;
-  mapping(bytes32 => bool) public validatorExist;
+  mapping(bytes32 => bool) public validatorExists;
 
   event InsertValidator(bytes _validator);
   event RemoveValidator(bytes _validator);
@@ -49,8 +49,7 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
   }
 
   modifier checkDuplicatedValidator(bytes memory _validatorUncmpPubkey) {
-    bytes32 _validatorPubkeyHash = keccak256(_validatorUncmpPubkey);
-    if (validatorExist[_validatorPubkeyHash]) {
+    if (isValidatorListed(_validatorUncmpPubkey)) {
       revert ValidatorAlreadyListed(_validatorUncmpPubkey);
     }
     _;
@@ -107,8 +106,8 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
     uint256 _index = getValidatorIndex(_oldValidatorUncmpPubkey);
     validators[_index].uncmpPubkey = _newValidatorUcmpPubkey;
 
-    validatorExist[keccak256(_oldValidatorUncmpPubkey)] = false;
-    validatorExist[keccak256(_newValidatorUcmpPubkey)] = true;
+    validatorExists[keccak256(_oldValidatorUncmpPubkey)] = false;
+    validatorExists[keccak256(_newValidatorUcmpPubkey)] = true;
 
     emit ReplaceValidator(_oldValidatorUncmpPubkey, _newValidatorUcmpPubkey);
   }
@@ -156,6 +155,10 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
     revert ValidatorNotFount(_validatorUncmpPubkey);
   }
 
+  function isValidatorListed(bytes memory _validatorUncmpPubkey) public view returns (bool) {
+    return validatorExists[keccak256(_validatorUncmpPubkey)];
+  }
+
   function _removeValidator(bytes memory _validatorUncmpPubkey) private {
     uint _validatorsLength = validatorsLength;
 
@@ -179,7 +182,7 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
       delete validators[_index];
     }
 
-    validatorExist[keccak256(_validatorUncmpPubkey)] = false;
+    validatorExists[keccak256(_validatorUncmpPubkey)] = false;
     validatorsLength--;
 
     emit RemoveValidator(_validatorUncmpPubkey);
@@ -195,7 +198,7 @@ contract StakedIPVaultOperations is Initializable, OwnableUpgradeable, IStakedIP
       revert InvalidLengthArray();
     }
 
-    validatorExist[keccak256(_validatorUncmpPubkey)] = true;
+    validatorExists[keccak256(_validatorUncmpPubkey)] = true;
     _validators[_validatorsLength].uncmpPubkey = _validatorUncmpPubkey;
     validatorsLength++;
 

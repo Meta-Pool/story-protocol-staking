@@ -49,6 +49,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
   error Unauthorized();
   error InvalidOperationsFee();
   error NotFullyOperational();
+  error ValidatorNotListed(bytes _validatorUncmpPubkey);
 
   function initialize(
     address _ipTokenStaking,
@@ -113,8 +114,9 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
   }
 
   modifier validatorExists(bytes calldata _validatorUncmpPubkey) {
-    // Reverts if validator is not in the list
-    operations.getValidatorIndex(_validatorUncmpPubkey);
+    if (!operations.isValidatorListed(_validatorUncmpPubkey)) {
+      revert ValidatorNotListed(_validatorUncmpPubkey);
+    }
     _;
   }
 
@@ -185,7 +187,6 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
   }
 
   function injectRewards() external payable {
-    // TODO: Check requires with revert
     if (msg.value == 0) {
       revert InvalidZeroAmount();
     }
@@ -242,7 +243,6 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     return shares;
   }
 
-  // TODO: Manage pending withdrawals
   function withdrawIP(uint _assets, address _receiver, address _owner) public returns (uint) {
     if (_assets == 0) {
       revert InvalidZeroAmount();
@@ -360,7 +360,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
       _amount,
       bytes('')
     );
-    
+
     emit Unstake(msg.sender, _validatorUncmpPubkey, _amount);
   }
 
