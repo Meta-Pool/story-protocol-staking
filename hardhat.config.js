@@ -7,6 +7,7 @@ const {
 
 require('@nomicfoundation/hardhat-toolbox')
 require('@openzeppelin/hardhat-upgrades')
+require("hardhat-contract-sizer");
 
 module.exports = {
   defaultNetwork: 'hardhat',
@@ -38,5 +39,11 @@ module.exports = {
         runs: 200,
       },
     },
-  }
+  },
+  contractSizer: {
+    alphaSort: true,
+    disambiguatePaths: false,
+    runOnCompile: true,
+    strict: false, // allow tests to run anyway
+  },
 }

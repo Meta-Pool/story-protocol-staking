@@ -5,27 +5,36 @@ const ONE_DAY_SECONDS = BigInt(24 * 60 * 60);
 async function deployStoryPoolFixture() {
 
   // Get the ContractFactory and Signers here.
-  const GovernanceToken = await ethers.getContractFactory("Token");
-  const VotingPower = await ethers.getContractFactory("VotingPowerTypeAV1Harness");
+  const WIP = await ethers.getContractFactory("WIP");
+  const RewardsManager = await ethers.getContractFactory("RewardsManager");
+  const StakedIP = await ethers.getContractFactory("StakedIP");
+  const StakedIPVaultOperations = await ethers.getContractFactory("StakedIPVaultOperations");
+  const Withdrawal = await ethers.getContractFactory("Withdrawal");
 
   const [
     owner,
+    operator,
     alice,
     bob,
     carl
   ] = await ethers.getSigners();
 
-  const GOV_TOKEN_UNITS = 18; // @notice: Update if needed.
-  const GovernanceTokenContract = await GovernanceToken.deploy(
-    "GovernanceToken",
-    "GT",
-    GOV_TOKEN_UNITS
-  );
-  await GovernanceTokenContract.waitForDeployment();
+  const WIPContract = await WIP.deploy();
+  await WIPContract.waitForDeployment();
 
   const VotingPowerContract = await upgrades.deployProxy(
     VotingPower,
-    [ GovernanceTokenContract.target ],
+    [ 
+      // address _ipTokenStaking,
+      WIPContract.target,
+      // IStakedIPVaultOperations _operations,
+      // IERC20 _asset,
+      // string memory _stIPName,
+      // string memory _stIPSymbol,
+      // uint _minDepositAmount,
+      // address _operator,
+      // address _owner
+    ],
     {
       initializer: "initializeHarness",
       unsafeAllow: ["constructor"]
@@ -51,6 +60,7 @@ async function deployStoryPoolFixture() {
     MIN_LOCKING_DAYS,
     MAX_LOCKING_DAYS,
     owner,
+    operator,
     alice,
     bob,
     carl
