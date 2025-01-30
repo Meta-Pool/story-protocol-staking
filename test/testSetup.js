@@ -35,6 +35,7 @@ async function deployStoryPoolFixture() {
   const [
     owner,
     operator,
+    treasury,
     alice,
     bob,
     carl
@@ -50,7 +51,7 @@ async function deployStoryPoolFixture() {
   //     uint256 minCommissionRate;
   //     uint256 fee;
   // }
-  initializerArgs = [
+  const initializerArgs = [
     owner.address,
     ethers.parseUnits("1024", 18),
     ethers.parseUnits("1024", 18),
@@ -62,7 +63,7 @@ async function deployStoryPoolFixture() {
     [ initializerArgs ],
     {
       initializer: "initialize",
-      unsafeAllow: ["constructor"],
+      unsafeAllow: ["constructor", "state-variable-immutable"],
       constructorArgs: [ethers.parseUnits("1", 18), 200n]
     }
   );
@@ -101,21 +102,44 @@ async function deployStoryPoolFixture() {
   );
   await StakedIPContract.waitForDeployment();
 
-  const RewardsManagerContract = await RewardsManager.deploy();
+  const RewardsManagerContract = await RewardsManager.deploy(
+    // address _owner,
+    owner.address,
+    // address _stakedIP,
+    StakedIPContract.target,
+    // address _treasury,
+    treasury.address,
+    // uint256 _rewardsFeeBp
+    500n
+  );
   await RewardsManagerContract.waitForDeployment();
 
+  const WithdrawalContract = await upgrades.deployProxy(
+    Withdrawal,
+    [ 
+      // address payable _stIP
+      StakedIPContract.target,
+    ],
+    {
+      initializer: "initialize",
+      unsafeAllow: ["constructor"]
+    }
+  );
+  await WithdrawalContract.waitForDeployment();
 
   return {
-    VotingPowerContract,
-    GovernanceTokenContract,
-    GOV_TOKEN_UNITS,
-    MIN_LOCKING_DAYS,
-    MAX_LOCKING_DAYS,
+    IPTokenStakingContract,
+    RewardsManagerContract,
+    StakedIPContract,
+    WIPContract,
+    WithdrawalContract,
+
     owner,
     operator,
+    treasury,
     alice,
     bob,
-    carl
+    carl,
   };
 }
 

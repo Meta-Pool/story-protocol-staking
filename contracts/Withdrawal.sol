@@ -43,6 +43,8 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
     error WithdrawAlreadeCompleted(address _user, uint _request_id);
     error UserMaxWithdrawalsReached(address _user);
 
+    constructor() { _disableInitializers(); }
+
     function initialize(address payable _stIP) external initializer {
         __Ownable_init(msg.sender);
         stIP = _stIP;
