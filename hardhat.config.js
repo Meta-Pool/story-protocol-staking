@@ -22,7 +22,7 @@ module.exports = {
       // },
     },
     testnet: {
-      url: RPC_URL,
+      url: "https://rpc.odyssey.storyrpc.io/",
       accounts: { mnemonic: MNEMONIC },
     },
     mainnet: {

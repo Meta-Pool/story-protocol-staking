@@ -49,10 +49,10 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     error ValidatorNotListed(bytes _validatorUncmpPubkey);
 
     /// todo: auditors usually recommend to _disableInitializers().
+    constructor() { _disableInitializers(); }
 
     function initialize(
         address _ipTokenStaking,
-        // IStakedIPVaultOperations _operations,
         IERC20 _asset,
         string memory _stIPName,
         string memory _stIPSymbol,

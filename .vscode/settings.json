@@ -4,6 +4,7 @@
         "Initializable",
         "IWIP",
         "keccak",
+        "Reentrancy",
         "Uncmp",
         "Unstake"
     ]
