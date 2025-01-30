@@ -1,21 +1,25 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import '@openzeppelin/contracts/access/Ownable.sol';
-import '@openzeppelin/contracts/interfaces/IERC20.sol';
-import '@openzeppelin/contracts/utils/Address.sol';
-import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
-import '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
 import './interfaces/IRewardsManager.sol';
 import './interfaces/IStakedIP.sol';
+import '@openzeppelin/contracts/access/Ownable.sol';
+import '@openzeppelin/contracts/interfaces/IERC20.sol';
+import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+import '@openzeppelin/contracts/utils/Address.sol';
+import '@openzeppelin/contracts/utils/ReentrancyGuard.sol';
+import { Math } from '@openzeppelin/contracts/utils/math/Math.sol';
 
+/// @title RewardsManager for StakedIP
+/// @author Meta Pool devs team
 /// @dev Receive rewards from the validators and re-stake them into the vault
 contract RewardsManager is IRewardsManager, Ownable, ReentrancyGuard {
-
     using Address for address payable;
+    using Math for uint256;
     using SafeERC20 for IERC20;
 
     uint16 private constant ONE_HUNDRED = 10_000;
+    uint16 private constant MAX_REWARDS_FEE = 4_000; // 40%
 
     address public immutable stakedIP;
     address public treasury;
@@ -23,15 +27,22 @@ contract RewardsManager is IRewardsManager, Ownable, ReentrancyGuard {
 
     event SendRewardsAndFees(address indexed _caller, uint256 _rewards, uint256 _treasuryFee);
     event UpdateTreasury(address indexed _caller, address _treasury);
+    event UpdateRewardsFee(address indexed _caller, uint256 _rewardsFeeBp);
 
     error InvalidAddressZero();
+    error InvalidRewardsFee();
+
+    modifier checkRewards(uint256 _rewardsFeeBp) {
+        require(_rewardsFeeBp <= MAX_REWARDS_FEE, InvalidRewardsFee());
+        _;
+    }
 
     constructor(
         address _owner,
         address _stakedIP,
-        uint256 _rewardsFeeBp,
-        address _treasury
-    ) Ownable(_owner) ReentrancyGuard() {
+        address _treasury,
+        uint256 _rewardsFeeBp
+    ) Ownable(_owner) ReentrancyGuard() checkRewards(_rewardsFeeBp) {
         stakedIP = _stakedIP;
         treasury = _treasury;
         rewardsFeeBp = _rewardsFeeBp;
@@ -44,10 +55,18 @@ contract RewardsManager is IRewardsManager, Ownable, ReentrancyGuard {
         emit UpdateTreasury(msg.sender, _treasury);
     }
 
+    function updateRewardsFee(uint256 _rewardsFeeBp) external onlyOwner checkRewards(_rewardsFeeBp) {
+        rewardsFeeBp = _rewardsFeeBp;
+
+        emit UpdateRewardsFee(msg.sender, _rewardsFeeBp);
+    }
+
     function getManagerAccrued() public view returns (uint256 rewards, uint256 treasuryFee) {
         uint256 balance = address(this).balance;
-        treasuryFee = (balance * rewardsFeeBp) / ONE_HUNDRED;
-        rewards = balance - treasuryFee;
+        if (balance > 0) {
+            treasuryFee = balance.mulDiv(rewardsFeeBp, ONE_HUNDRED, Math.Rounding.Floor);
+            rewards = balance - treasuryFee;
+        }
     }
 
     /// @notice Send rewards to stIP and claim fees to treasury

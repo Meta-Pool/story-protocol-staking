@@ -101,6 +101,9 @@ async function deployStoryPoolFixture() {
   );
   await StakedIPContract.waitForDeployment();
 
+  const RewardsManagerContract = await RewardsManager.deploy();
+  await RewardsManagerContract.waitForDeployment();
+
 
   return {
     VotingPowerContract,
