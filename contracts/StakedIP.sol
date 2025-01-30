@@ -48,9 +48,16 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     error LessThanMinDeposit();
     // error NotEnoughIPSent(); // not used
     error OperatorUnauthorized();
-    error InvalidOperationsFee();
+    error InvalidIPFee();
     error NotFullyOperational();
     error ValidatorNotListed(bytes _validatorUncmpPubkey);
+    error ValidatorAlreadyListed(bytes _invalidValidator);
+    error ValidatorHasTargetPercent(Validator _validator);
+    error InvalidLengthArray();
+    error ShouldBeOneHundred(uint256 _sumOfPercentages);
+    error SizeMismatch();
+    error ValidatorNotFount(bytes _validator);
+    error ValidatorsEmptyList();
 
     /// todo: auditors usually recommend to _disableInitializers().
     constructor() { _disableInitializers(); }
@@ -76,8 +83,10 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
 
         ipTokenStaking = _ipTokenStaking;
 
-        bulkInsertValidators(_validatorsPubkey);
-        updateValidatorsTarget(_validatorsStakePercent);
+        for (uint i = 0; i < _validatorsPubkey.length; ++i) {
+            _insertValidator(_validatorsPubkey[i]);
+        }
+        _updateValidatorsTarget(_validatorsStakePercent);
 
         toggleContractOperation();
         /// TODO: Can we make the initializer payable to avoid this?
@@ -95,9 +104,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     }
 
     modifier onlyFullyOperational() {
-        if (!isFullyOperational()) {
-            revert NotFullyOperational();
-        }
+        require(isFullyOperational(), NotFullyOperational());
         _;
     }
 
@@ -107,10 +114,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     }
 
     modifier checkStakingOperationsFee() {
-        uint _fee = IIPTokenStaking(ipTokenStaking).fee();
-        if (msg.value != _fee) {
-            revert InvalidOperationsFee();
-        }
+        require (msg.value == IIPTokenStaking(ipTokenStaking).fee(), InvalidIPFee());
         _;
     }
 
@@ -378,20 +382,9 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     event ReplaceValidator(bytes _oldValidatorUncmpPubkey, bytes _newValidatorUncmpPubkey);
     event UpdateValidatorTargets(address _sender);
 
-    error ValidatorAlreadyListed(bytes _invalidValidator);
-    error ValidatorHasTargetPercent(Validator _validator);
-    error InvalidLengthArray();
-    error ShouldBeOneHundred(uint256 _sumOfPercentages);
-    error SizeMismatch();
-    error ValidatorNotFount(bytes _validator);
-    error ValidatorsEmptyList();
-
-
 
     modifier checkDuplicatedValidator(bytes memory _validatorUncmpPubkey) {
-        if (isValidatorListed(_validatorUncmpPubkey)) {
-            revert ValidatorAlreadyListed(_validatorUncmpPubkey);
-        }
+        require(!isValidatorListed(_validatorUncmpPubkey), ValidatorAlreadyListed(_validatorUncmpPubkey));
         _;
     }
 
@@ -400,7 +393,11 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     // ***************************
 
     /// Update all the validators target stakes percent
-    function updateValidatorsTarget(uint16[] calldata _targetStakesPercent) public onlyOwner {
+    function updateValidatorsTarget(uint16[] calldata _targetStakesPercent) external onlyOwner {
+        _updateValidatorsTarget(_targetStakesPercent);
+    }
+
+    function _updateValidatorsTarget(uint16[] calldata _targetStakesPercent) private {
         uint _validatorsLength = validatorsLength;
         if (_targetStakesPercent.length != _validatorsLength) {
             revert SizeMismatch();
@@ -432,7 +429,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     }
 
     /// @notice Insert validators in bul with zero target percent
-    function bulkInsertValidators(bytes[] memory _validatorsUncmpPubkey) public onlyOwner {
+    function bulkInsertValidators(bytes[] memory _validatorsUncmpPubkey) external onlyOwner {
         for (uint i = 0; i < _validatorsUncmpPubkey.length; ++i) {
             _insertValidator(_validatorsUncmpPubkey[i]);
         }
@@ -511,9 +508,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         uint256 _index = getValidatorIndex(_validatorUncmpPubkey);
         Validator memory _validator = validators[_index];
 
-        if (_validator.targetStakePercent > 0) {
-            revert ValidatorHasTargetPercent(_validator);
-        }
+        require(_validator.targetStakePercent == 0, ValidatorHasTargetPercent(_validator));
 
         if (_index != _validatorsLength - 1) {
             // Replace the element at the index with the last element in the array

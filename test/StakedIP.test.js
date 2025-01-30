@@ -78,23 +78,6 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
       });
     });
 
-    // stakedIP
-    // error OperatorUnauthorized();
-    // error InvalidOperationsFee();
-    // error NotFullyOperational();
-    // error ValidatorNotListed(bytes _validatorUncmpPubkey);
-    // error OwnableUnauthorizedAccount(address account);
-
-    // withdrawal
-    // error Unauthorized(address _caller, address _authorized);
-    // error NotEnoughIPtoStake(uint _requested, uint _available);
-    // error ClaimTooSoon(uint timestampUnlock);
-    // error InvalidDisassembleTime(uint valueSent, uint maxValue);
-    // error InvalidRequest();
-    // error InvalidRequestId(address _user, uint _request_id);
-    // error WithdrawAlreadeCompleted(address _user, uint _request_id);
-    // error UserMaxWithdrawalsReached(address _user);
-    // error OwnableUnauthorizedAccount(address account);
     describe("Trigger all unit errors", function () {
       it(`[T103]-${index + 1} RewardsManagerContract - InvalidAddressZero().`, async function () {
         const {
@@ -233,10 +216,8 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
       it(`[T109]-${index + 1} StakedIPContract - OperatorUnauthorized().`, async function () {
         const {
           StakedIPContract,
-          owner,
           FEE,
           alice,
-          operator,
         } = await loadFixture(fixture);
 
         await expect(
@@ -266,6 +247,7 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
             1,
             //     bytes calldata _extraData
             "0x",
+            { value: FEE }
           )
         ).to.be.revertedWithCustomError(StakedIPContract, "OperatorUnauthorized");
 
@@ -279,8 +261,262 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
             ethers.parseEther("1"),
             // uint _delegation_id
             1,
+            { value: FEE }
           )
         ).to.be.revertedWithCustomError(StakedIPContract, "OperatorUnauthorized");
+      });
+
+      it(`[T110]-${index + 1} StakedIPContract - InvalidIPFee().`, async function () {
+        const {
+          StakedIPContract,
+          WithdrawalContract,
+          RewardsManagerContract,
+          FEE,
+          owner,
+          operator,
+        } = await loadFixture(fixture);
+
+        await expect(
+          StakedIPContract.connect(owner).updateWithdrawal(WithdrawalContract.target, { value: FEE + 1n })
+        ).to.be.revertedWithCustomError(StakedIPContract, "InvalidIPFee");
+
+        await expect(
+          StakedIPContract.connect(owner).updateRewardsManager(RewardsManagerContract.target, { value: FEE - 1n })
+        ).to.be.revertedWithCustomError(StakedIPContract, "InvalidIPFee");
+
+        await expect(
+          StakedIPContract.connect(operator).unstake(
+            //     bytes calldata _validatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[0].publicKey,
+            //     uint _amount,
+            ethers.parseEther("1"),
+            //     uint _delegation_id,
+            1,
+            //     bytes calldata _extraData
+            "0x",
+            { value: FEE - 1n }
+          )
+        ).to.be.revertedWithCustomError(StakedIPContract, "InvalidIPFee");
+
+        await expect(
+          StakedIPContract.connect(operator).redelegate(
+            // bytes calldata _oldValidatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[0].publicKey,
+            // bytes calldata _newValidatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[1].publicKey,
+            // uint _amount,
+            ethers.parseEther("1"),
+            // uint _delegation_id
+            1,
+            { value: FEE + 1n }
+          )
+        ).to.be.revertedWithCustomError(StakedIPContract, "InvalidIPFee");
+      });
+
+      it(`[T111]-${index + 1} StakedIPContract - NotFullyOperational().`, async function () {
+        const {
+          StakedIPContract,
+          WithdrawalContract,
+          RewardsManagerContract,
+          FEE,
+          owner,
+          operator,
+          alice,
+        } = await loadFixture(fixture);
+
+        await StakedIPContract.connect(alice).depositIP(alice.address, {value: ethers.parseEther("1")});
+
+        await StakedIPContract.connect(owner).toggleContractOperation();
+
+        await expect(
+          StakedIPContract.connect(alice).depositIP(alice.address, {value: ethers.parseEther("1")})
+        ).to.be.revertedWithCustomError(StakedIPContract, "NotFullyOperational");
+
+        await expect(
+          StakedIPContract.connect(alice).withdraw(ethers.parseEther("1"), alice.address, alice.address)
+        ).to.be.revertedWithCustomError(StakedIPContract, "NotFullyOperational");
+
+        await expect(
+          StakedIPContract.connect(operator).stake(
+            // bytes calldata _validatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[0].publicKey,
+            // uint _amount,
+            ethers.parseEther("1"),
+            // IIPTokenStaking.StakingPeriod _period,
+            1,
+            // bytes calldata _extraData
+            "0x",
+          )
+        ).to.be.revertedWithCustomError(StakedIPContract, "NotFullyOperational");
+
+        await expect(
+          StakedIPContract.connect(operator).unstake(
+            //     bytes calldata _validatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[0].publicKey,
+            //     uint _amount,
+            ethers.parseEther("1"),
+            //     uint _delegation_id,
+            1,
+            //     bytes calldata _extraData
+            "0x",
+            { value: FEE }
+          )
+        ).to.be.revertedWithCustomError(StakedIPContract, "NotFullyOperational");
+
+        await expect(
+          StakedIPContract.connect(operator).redelegate(
+            // bytes calldata _oldValidatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[0].publicKey,
+            // bytes calldata _newValidatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[1].publicKey,
+            // uint _amount,
+            ethers.parseEther("1"),
+            // uint _delegation_id
+            1,
+            { value: FEE }
+          )
+        ).to.be.revertedWithCustomError(StakedIPContract, "NotFullyOperational");
+      });
+
+    // stakedIP
+    // error ValidatorHasTargetPercent(Validator _validator);
+    // error InvalidLengthArray();
+    // error ShouldBeOneHundred(uint256 _sumOfPercentages);
+    // error SizeMismatch();
+    // error ValidatorNotFount(bytes _validator);
+    // error ValidatorsEmptyList();
+
+    // withdrawal
+    // error Unauthorized(address _caller, address _authorized);
+    // error NotEnoughIPtoStake(uint _requested, uint _available);
+    // error ClaimTooSoon(uint timestampUnlock);
+    // error InvalidDisassembleTime(uint valueSent, uint maxValue);
+    // error InvalidRequest();
+    // error InvalidRequestId(address _user, uint _request_id);
+    // error WithdrawAlreadeCompleted(address _user, uint _request_id);
+    // error UserMaxWithdrawalsReached(address _user);
+    // error OwnableUnauthorizedAccount(address account);
+      it(`[T112]-${index + 1} StakedIPContract - ValidatorNotListed().`, async function () {
+        const {
+          StakedIPContract,
+          FEE,
+          operator,
+        } = await loadFixture(fixture);
+
+        await expect(
+          StakedIPContract.connect(operator).stake(
+            // bytes calldata _validatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[3].publicKey,
+            // uint _amount,
+            ethers.parseEther("1"),
+            // IIPTokenStaking.StakingPeriod _period,
+            1,
+            // bytes calldata _extraData
+            "0x",
+          )
+        ).to.be.revertedWithCustomError(StakedIPContract, "ValidatorNotListed");
+
+        await expect(
+          StakedIPContract.connect(operator).unstake(
+            //     bytes calldata _validatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[3].publicKey,
+            //     uint _amount,
+            ethers.parseEther("1"),
+            //     uint _delegation_id,
+            1,
+            //     bytes calldata _extraData
+            "0x",
+            { value: FEE }
+          )
+        ).to.be.revertedWithCustomError(StakedIPContract, "ValidatorNotListed");
+
+        await expect(
+          StakedIPContract.connect(operator).redelegate(
+            // bytes calldata _oldValidatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[0].publicKey,
+            // bytes calldata _newValidatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[3].publicKey,
+            // uint _amount,
+            ethers.parseEther("1"),
+            // uint _delegation_id
+            1,
+            { value: FEE }
+          )
+        ).to.be.revertedWithCustomError(StakedIPContract, "ValidatorNotListed");
+      });
+
+      it(`[T113]-${index + 1} StakedIPContract - OwnableUnauthorizedAccount().`, async function () {
+        const {
+          StakedIPContract,
+          FEE,
+          alice,
+          operator,
+        } = await loadFixture(fixture);
+
+        await expect(
+          StakedIPContract.connect(operator).updateWithdrawal(operator.address, { value: FEE })
+        ).to.be.revertedWithCustomError(StakedIPContract, "OwnableUnauthorizedAccount");
+
+        await expect(
+          StakedIPContract.connect(operator).updateRewardsManager(operator.address, { value: FEE })
+        ).to.be.revertedWithCustomError(StakedIPContract, "OwnableUnauthorizedAccount");
+
+        await expect(
+          StakedIPContract.connect(operator).toggleContractOperation()
+        ).to.be.revertedWithCustomError(StakedIPContract, "OwnableUnauthorizedAccount");
+
+        await expect(
+          StakedIPContract.connect(operator).updateMinDepositAmount(ethers.parseEther("1"))
+        ).to.be.revertedWithCustomError(StakedIPContract, "OwnableUnauthorizedAccount");
+
+        await expect(
+          StakedIPContract.connect(operator).updateOperator(alice.address)
+        ).to.be.revertedWithCustomError(StakedIPContract, "OwnableUnauthorizedAccount");
+
+        await expect(
+          StakedIPContract.connect(operator).updateValidatorsTarget([5000, 2000, 3000])
+        ).to.be.revertedWithCustomError(StakedIPContract, "OwnableUnauthorizedAccount");
+
+        await expect(
+          StakedIPContract.connect(operator).bulkRemoveValidators([DUMMY_VALIDATOR_SET[0].publicKey, DUMMY_VALIDATOR_SET[1].publicKey])
+        ).to.be.revertedWithCustomError(StakedIPContract, "OwnableUnauthorizedAccount");
+
+        await expect(
+          StakedIPContract.connect(operator).bulkInsertValidators([DUMMY_VALIDATOR_SET[0].publicKey, DUMMY_VALIDATOR_SET[1].publicKey])
+        ).to.be.revertedWithCustomError(StakedIPContract, "OwnableUnauthorizedAccount");
+
+        await expect(
+          StakedIPContract.connect(operator).replaceOneValidator(DUMMY_VALIDATOR_SET[0].publicKey, DUMMY_VALIDATOR_SET[3].publicKey)
+        ).to.be.revertedWithCustomError(StakedIPContract, "OwnableUnauthorizedAccount");
+      });
+
+      it(`[T114]-${index + 1} StakedIPContract - ValidatorAlreadyListed().`, async function () {
+        const {
+          StakedIPContract,
+          owner,
+        } = await loadFixture(fixture);
+
+        await expect(
+          StakedIPContract.connect(owner).bulkInsertValidators([DUMMY_VALIDATOR_SET[0].publicKey, DUMMY_VALIDATOR_SET[3].publicKey])
+        ).to.be.revertedWithCustomError(StakedIPContract, "ValidatorAlreadyListed");
+
+        await expect(
+          StakedIPContract.connect(owner).replaceOneValidator(DUMMY_VALIDATOR_SET[0].publicKey, DUMMY_VALIDATOR_SET[1].publicKey)
+        ).to.be.revertedWithCustomError(StakedIPContract, "ValidatorAlreadyListed");
+      });
+
+      it(`[T115]-${index + 1} StakedIPContract - ValidatorHasTargetPercent().`, async function () {
+        const {
+          StakedIPContract,
+          owner,
+        } = await loadFixture(fixture);
+
+        await StakedIPContract.connect(owner).bulkInsertValidators([DUMMY_VALIDATOR_SET[0].publicKey]);
+        console.log("esto: ", await StakedIPContract.getValidatorIndex(DUMMY_VALIDATOR_SET[0].publicKey));
+
+        // await expect(
+        //   StakedIPContract.connect(owner).bulkRemoveValidators([DUMMY_VALIDATOR_SET[0].publicKey])
+        // ).to.be.revertedWithCustomError(StakedIPContract, "ValidatorHasTargetPercent");
       });
     });
   });

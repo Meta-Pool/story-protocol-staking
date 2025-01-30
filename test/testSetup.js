@@ -23,6 +23,12 @@ const DUMMY_VALIDATOR_SET = [
     "publicKey": "0x021d542e99c036aa55bcbc899585f30eaa0bff47bbbf2f643a4ed5044f42bbfd70",
     "privateKey": "0xeafe3bd53f136390be56fe6715d78c7710ae51cd2768fbfc3da4d1efabfc4730"
   },
+  {
+    "path": "m/44'/60'/0'/0/3",
+    "address": "0x34b8C22Ee0d6100Af6547d6FEE77953711fae36E",
+    "publicKey": "0x02a52245277652393885a3163c46660f11331677ab528c96548a9e39bdb76b6c71",
+    "privateKey": "0xac99bf36a7f32506a40bcfa2724181b5f4a11649d684995498e67c169a04ab1a"
+  },
 ];
 
 async function deployStoryPoolFixture() {
