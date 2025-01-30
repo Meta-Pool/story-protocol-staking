@@ -19,18 +19,17 @@ contract RewardsManager is IRewardsManager, Ownable, ReentrancyGuard {
 
     address public immutable stakedIP;
     address public treasury;
-    uint public rewardsFeeBp;
+    uint256 public rewardsFeeBp;
 
-    event SendRewards(address _caller, uint _amount);
-    event SendFees(address _caller, uint _amount);
-    event UpdateTreasury(address _caller, address _treasury);
+    event SendRewardsAndFees(address indexed _caller, uint256 _rewards, uint256 _treasuryFee);
+    event UpdateTreasury(address indexed _caller, address _treasury);
 
     error InvalidAddressZero();
 
     constructor(
         address _owner,
         address _stakedIP,
-        uint _rewardsFeeBp,
+        uint256 _rewardsFeeBp,
         address _treasury
     ) Ownable(_owner) ReentrancyGuard() {
         stakedIP = _stakedIP;
@@ -45,8 +44,8 @@ contract RewardsManager is IRewardsManager, Ownable, ReentrancyGuard {
         emit UpdateTreasury(msg.sender, _treasury);
     }
 
-    function getManagerAccrued() public view returns (uint rewards, uint treasuryFee) {
-        uint balance = address(this).balance;
+    function getManagerAccrued() public view returns (uint256 rewards, uint256 treasuryFee) {
+        uint256 balance = address(this).balance;
         treasuryFee = (balance * rewardsFeeBp) / ONE_HUNDRED;
         rewards = balance - treasuryFee;
     }
@@ -54,12 +53,11 @@ contract RewardsManager is IRewardsManager, Ownable, ReentrancyGuard {
     /// @notice Send rewards to stIP and claim fees to treasury
     /// @dev Technically safe to be called by anyone
     function sendRewardsAndFees() external nonReentrant {
-        (uint rewards, uint treasuryFee) = getManagerAccrued();
+        (uint256 rewards, uint256 treasuryFee) = getManagerAccrued();
 
-        IStakedIP(stakedIP).injectRewards{ value: rewards }();
-        payable(treasury).sendValue(treasuryFee);
+        if (rewards > 0) IStakedIP(stakedIP).injectRewards{ value: rewards }();
+        if (treasuryFee > 0) payable(treasury).sendValue(treasuryFee);
 
-        emit SendRewards(msg.sender, rewards);
-        emit SendFees(msg.sender, treasuryFee);
+        emit SendRewardsAndFees(msg.sender, rewards, treasuryFee);
     }
 }
