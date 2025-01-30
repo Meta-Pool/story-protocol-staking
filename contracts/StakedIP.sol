@@ -162,15 +162,6 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     // * Operator Functions *
     // **********************
 
-    /// todo: remove this function
-    // /// @notice Converts the given public key to an EVM address.
-    // /// @dev Assume all calls to this function passes in the uncompressed public key.
-    // /// @param uncmpPubkey 65 bytes uncompressed secp256k1 public key, with prefix 04.
-    // /// @return address The EVM address derived from the public key.
-    // function _uncmpPubkeyToAddress(bytes calldata uncmpPubkey) internal pure returns (address) {
-    //     return address(uint160(uint(keccak256(uncmpPubkey[1:]))));
-    // }
-
     // *********************
     // * ERC4626 functions *
     // *********************
@@ -189,11 +180,9 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         return totalUnderlying + rewards;
     }
 
-    /// todo: not everybody can send rewards to the vault!
     function injectRewards() external payable {
         require(msg.value > 0, InvalidZeroAmount());
-        require(msg.value >= minDepositAmount, LessThanMinDeposit()); /// todo: is injecting rewards a deposit ????
-
+        require(msg.value >= minDepositAmount, LessThanMinDeposit());
         totalUnderlying += msg.value;
     }
 
@@ -243,12 +232,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
 
         return shares;
     }
-
-    /// todo: allowing burning is a very very bad idea.
-    // function burn(uint _shares) public override onlyFullyOperational {
-    //     _burn(msg.sender, _shares);
-    // }
-
+    
     // **********************
     // * Internal functions *
     // **********************
