@@ -4,6 +4,7 @@ const { loadFixture, time } = require("@nomicfoundation/hardhat-network-helpers"
 const {
   deployStoryPoolFixture,
   ONE_DAY_SECONDS,
+  GWEI,
 } = require("./testSetup");
 
 describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
@@ -77,7 +78,6 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
     });
 
     // stakedIP
-    // error InvalidZeroAddress();
     // error LessThanMinDeposit();
     // error NotEnoughIPSent();
     // error Unauthorized();
@@ -184,7 +184,7 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
 
         await expect(
           StakedIPContract.connect(alice).injectRewards({value: 0})
-        ).to.be.revertedWithCustomError(StakedIPContract, "InvalidZeroAmount");
+        ).to.be.revertedWithCustomError(StakedIPContract, "LessThanMinDeposit");
 
         await expect(
           StakedIPContract.connect(alice).withdraw(0, alice.address, alice.address)
@@ -209,6 +209,26 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
         await expect(
           StakedIPContract.connect(owner).updateOperator(ethers.ZeroAddress)
         ).to.be.revertedWithCustomError(StakedIPContract, "InvalidZeroAddress");
+      });
+
+      it(`[T108]-${index + 1} StakedIPContract - LessThanMinDeposit().`, async function () {
+        const {
+          StakedIPContract,
+          owner,
+          alice,
+        } = await loadFixture(fixture);
+
+        await expect(
+          StakedIPContract.connect(owner).updateMinDepositAmount(GWEI - 1n)
+        ).to.be.revertedWithCustomError(StakedIPContract, "LessThanMinDeposit");
+
+        await expect(
+          StakedIPContract.connect(owner).injectRewards({ value: (await StakedIPContract.minDepositAmount()) - 1n })
+        ).to.be.revertedWithCustomError(StakedIPContract, "LessThanMinDeposit");
+
+        await expect(
+          StakedIPContract.connect(alice).depositIP(alice.address, { value: (await StakedIPContract.minDepositAmount()) - 1n })
+        ).to.be.revertedWithCustomError(StakedIPContract, "LessThanMinDeposit");
       });
     });
   });

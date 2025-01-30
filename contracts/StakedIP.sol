@@ -184,7 +184,6 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     }
 
     function injectRewards() external payable {
-        require(msg.value > 0, InvalidZeroAmount());
         require(msg.value >= minDepositAmount, LessThanMinDeposit());
         totalUnderlying += msg.value;
     }
@@ -247,7 +246,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         uint _assets,
         uint _shares
     ) internal override onlyFullyOperational {
-        require(_assets > 0 && _shares > 0, InvalidZeroAmount());
+        require(_shares > 0, InvalidZeroAmount());
         require(_assets >= minDepositAmount, LessThanMinDeposit());
 
         _mint(_receiver, _shares);

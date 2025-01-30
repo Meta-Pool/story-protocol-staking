@@ -2,6 +2,7 @@ const { ethers, upgrades } = require("hardhat");
 
 const ONE_DAY_SECONDS = BigInt(24 * 60 * 60);
 const MLARGE = ethers.parseEther("100000000");
+const GWEI = ethers.parseUnits("1", 9);
 
 const DUMMY_VALIDATOR_SET = [
   {
@@ -155,5 +156,6 @@ async function deployStoryPoolFixture() {
 module.exports = {
   ONE_DAY_SECONDS,
   MLARGE,
+  GWEI,
   deployStoryPoolFixture,
 };
