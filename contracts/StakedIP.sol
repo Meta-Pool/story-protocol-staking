@@ -53,9 +53,9 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     error ValidatorNotListed(bytes _validatorUncmpPubkey);
     error ValidatorAlreadyListed(bytes _invalidValidator);
     error ValidatorHasTargetPercent(Validator _validator);
-    error InvalidLengthArray();
+    error MaxValidatorsExceeded();
     error ShouldBeOneHundred(uint256 _sumOfPercentages);
-    error SizeMismatch();
+    error ArraySizeMismatch();
     error ValidatorNotFount(bytes _validator);
     error ValidatorsEmptyList();
 
@@ -403,9 +403,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
 
     function _updateValidatorsTarget(uint16[] calldata _targetStakesPercent) private {
         uint _validatorsLength = validatorsLength;
-        if (_targetStakesPercent.length != _validatorsLength) {
-            revert SizeMismatch();
-        }
+        require(_targetStakesPercent.length == _validatorsLength, ArraySizeMismatch());
 
         Validator[MAX_VALIDATORS] memory _validators = validators;
 
@@ -415,10 +413,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
             stakeSum += _targetStakesPercent[i];
         }
 
-        if (stakeSum != ONE_HUNDRED) {
-            revert ShouldBeOneHundred(stakeSum);
-        }
-
+        require(stakeSum == ONE_HUNDRED, ShouldBeOneHundred(stakeSum));
         validators = _validators;
 
         emit UpdateValidatorTargets(msg.sender);
@@ -504,10 +499,9 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     function _removeValidator(bytes memory _validatorUncmpPubkey) private {
         uint _validatorsLength = validatorsLength;
 
-        // Final validators array cannot be empty
-        if (_validatorsLength <= 1) {
-            revert ValidatorsEmptyList();
-        }
+        // The final validators array cannot be empty. Once initialized, it should be 
+        // theoretically impossible for it to become empty.
+        require(_validatorsLength > 1, ValidatorsEmptyList());
 
         uint256 _index = getValidatorIndex(_validatorUncmpPubkey);
         Validator memory _validator = validators[_index];
@@ -533,9 +527,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     ) private checkDuplicatedValidator(_validatorUncmpPubkey) {
         uint _validatorsLength = validatorsLength;
 
-        if (_validatorsLength >= MAX_VALIDATORS) {
-            revert InvalidLengthArray();
-        }
+        /// notice how it needs to be at least one less than the MAX_VALIDATORS.
+        require(_validatorsLength < MAX_VALIDATORS, MaxValidatorsExceeded());
 
         /// updating storage.
         validatorExists[keccak256(_validatorUncmpPubkey)] = true;

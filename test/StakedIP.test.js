@@ -378,14 +378,6 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
         ).to.be.revertedWithCustomError(StakedIPContract, "NotFullyOperational");
       });
 
-    // stakedIP
-    // error ValidatorHasTargetPercent(Validator _validator);
-    // error InvalidLengthArray();
-    // error ShouldBeOneHundred(uint256 _sumOfPercentages);
-    // error SizeMismatch();
-    // error ValidatorNotFount(bytes _validator);
-    // error ValidatorsEmptyList();
-
     // withdrawal
     // error Unauthorized(address _caller, address _authorized);
     // error NotEnoughIPtoStake(uint _requested, uint _available);
@@ -513,6 +505,74 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
 
         await expect(
           StakedIPContract.connect(owner).bulkRemoveValidators([DUMMY_VALIDATOR_SET[0].publicKey])
+        ).to.be.revertedWithCustomError(StakedIPContract, "ValidatorHasTargetPercent");
+      });
+
+      it(`[T116]-${index + 1} StakedIPContract - MaxValidatorsExceeded().`, async function () {
+        const {
+          StakedIPContract,
+          owner,
+        } = await loadFixture(fixture);
+
+        await expect(
+          StakedIPContract.connect(owner).bulkInsertValidators([
+            DUMMY_VALIDATOR_SET[3].publicKey,
+            DUMMY_VALIDATOR_SET[4].publicKey,
+            DUMMY_VALIDATOR_SET[5].publicKey,
+            DUMMY_VALIDATOR_SET[6].publicKey,
+            DUMMY_VALIDATOR_SET[7].publicKey,
+            DUMMY_VALIDATOR_SET[8].publicKey,
+            DUMMY_VALIDATOR_SET[9].publicKey,
+            DUMMY_VALIDATOR_SET[10].publicKey
+          ])
+        ).to.be.revertedWithCustomError(StakedIPContract, "MaxValidatorsExceeded");
+      });
+
+      it(`[T117]-${index + 1} StakedIPContract - ShouldBeOneHundred().`, async function () {
+        const {
+          StakedIPContract,
+          owner,
+        } = await loadFixture(fixture);
+
+        await expect(
+          StakedIPContract.connect(owner).updateValidatorsTarget([5000, 2000, 2000])
+        ).to.be.revertedWithCustomError(StakedIPContract, "ShouldBeOneHundred");
+      });
+
+      it(`[T118]-${index + 1} StakedIPContract - ArraySizeMismatch().`, async function () {
+        const {
+          StakedIPContract,
+          owner,
+        } = await loadFixture(fixture);
+
+        await expect(
+          StakedIPContract.connect(owner).updateValidatorsTarget([5000, 2000, 2000, 1000])
+        ).to.be.revertedWithCustomError(StakedIPContract, "ArraySizeMismatch");
+      });
+
+      it(`[T119]-${index + 1} StakedIPContract - ValidatorNotFount().`, async function () {
+        const {
+          StakedIPContract,
+          owner,
+        } = await loadFixture(fixture);
+
+        await expect(
+          StakedIPContract.connect(owner).getValidatorIndex(DUMMY_VALIDATOR_SET[3].publicKey)
+        ).to.be.revertedWithCustomError(StakedIPContract, "ValidatorNotFount");
+      });
+
+      it(`[T120]-${index + 1} StakedIPContract - ValidatorsEmptyList().`, async function () {
+        const {
+          StakedIPContract,
+          owner,
+        } = await loadFixture(fixture);
+
+        // notice: there is no way to reach that error!
+
+        // await StakedIPContract.connect(owner).updateValidatorsTarget([0, 0, 0]);
+        await expect(
+          StakedIPContract.connect(owner).bulkRemoveValidators([DUMMY_VALIDATOR_SET[0].publicKey, DUMMY_VALIDATOR_SET[1].publicKey, DUMMY_VALIDATOR_SET[2].publicKey])
+        // ).to.be.revertedWithCustomError(StakedIPContract, "ValidatorsEmptyList");
         ).to.be.revertedWithCustomError(StakedIPContract, "ValidatorHasTargetPercent");
       });
     });
