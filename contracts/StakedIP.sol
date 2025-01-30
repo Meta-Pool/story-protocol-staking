@@ -388,6 +388,10 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         _;
     }
 
+    function getValidators() external view returns (Validator[MAX_VALIDATORS] memory) {
+        return validators;
+    }
+
     // ***************************
     // * Update Params Functions *
     // ***************************
@@ -527,15 +531,15 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     function _insertValidator(
         bytes memory _validatorUncmpPubkey
     ) private checkDuplicatedValidator(_validatorUncmpPubkey) {
-        Validator[MAX_VALIDATORS] memory _validators = validators;
         uint _validatorsLength = validatorsLength;
 
         if (_validatorsLength >= MAX_VALIDATORS) {
             revert InvalidLengthArray();
         }
 
+        /// updating storage.
         validatorExists[keccak256(_validatorUncmpPubkey)] = true;
-        _validators[_validatorsLength].uncmpPubkey = _validatorUncmpPubkey;
+        validators[_validatorsLength].uncmpPubkey = _validatorUncmpPubkey;
         validatorsLength++;
 
         emit InsertValidator(_validatorUncmpPubkey);

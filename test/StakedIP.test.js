@@ -511,12 +511,9 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
           owner,
         } = await loadFixture(fixture);
 
-        await StakedIPContract.connect(owner).bulkInsertValidators([DUMMY_VALIDATOR_SET[0].publicKey]);
-        console.log("esto: ", await StakedIPContract.getValidatorIndex(DUMMY_VALIDATOR_SET[0].publicKey));
-
-        // await expect(
-        //   StakedIPContract.connect(owner).bulkRemoveValidators([DUMMY_VALIDATOR_SET[0].publicKey])
-        // ).to.be.revertedWithCustomError(StakedIPContract, "ValidatorHasTargetPercent");
+        await expect(
+          StakedIPContract.connect(owner).bulkRemoveValidators([DUMMY_VALIDATOR_SET[0].publicKey])
+        ).to.be.revertedWithCustomError(StakedIPContract, "ValidatorHasTargetPercent");
       });
     });
   });
