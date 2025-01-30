@@ -3,16 +3,15 @@ const { ethers, upgrades } = require("hardhat");
 const { loadFixture, time } = require("@nomicfoundation/hardhat-network-helpers");
 const {
   deployStoryPoolFixture,
+  ONE_DAY_SECONDS,
 } = require("./testSetup");
-
-const MLARGE = ethers.parseEther("100000000");
 
 describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
   const fixtures = [deployStoryPoolFixture];
 
   fixtures.forEach((fixture, index) => {
     describe("Deploying Staked IP protocol", function () {
-      it(`[T100]-${index + 1} Initial parameters are correct.`, async function () {
+      it(`[T100]-${index + 1} StakedIPContract initial parameters are correct.`, async function () {
         const {
           IPTokenStakingContract,
           RewardsManagerContract,
@@ -29,291 +28,188 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
         } = await loadFixture(fixture);
 
         expect(await StakedIPContract.owner()).to.be.equal(owner.address);
+        expect(await StakedIPContract.fullyOperational()).to.be.equal(true);
 
-        // const aliceUSDTBalance = await USDTTokenContract.balanceOf(alice.address);
-        // expect(await StakedVerdeContract.balanceOf(alice.address)).to.be.equal(0);
+        expect(await StakedIPContract.minDepositAmount()).to.be.equal(ethers.parseEther("1"));
+        expect(await StakedIPContract.totalUnderlying()).to.be.equal(0);
+        expect(await StakedIPContract.ipTokenStaking()).to.be.equal(IPTokenStakingContract.target);
+        expect(await StakedIPContract.operator()).to.be.equal(operator.address);
 
-        // expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
-        // // console.log("Total Assets: ", await StakedVerdeContract.totalAssets());
-        // // console.log("Alice Balanc: ", aliceUSDTBalance);
-        // await USDTTokenContract.connect(alice).approve(StakedStableContract.target, aliceUSDTBalance);
-        // await StakedStableContract.connect(alice).swapAndStakeVerde(SwapVerdeContract.target, aliceUSDTBalance, 0);
-        // expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
-        // const [previewVerde, swapFee] = await SwapVerdeContract.previewStableToVerde(aliceUSDTBalance);
-        // expect(await StakedVerdeContract.balanceOf(alice.address)).to.be.equal(
-        //   await StakedVerdeContract.previewDeposit(previewVerde)
-        // );
-        // expect(await SwapVerdeContract.getStableLiquidity()).to.be.equal(
-        //   aliceUSDTBalance
-        // );
+        expect(await StakedIPContract.asset()).to.be.equal(WIPContract.target);
+        expect(await StakedIPContract.totalSupply()).to.be.equal(0);
 
-        // // fees
-        // expect(await VerdeTokenContract.balanceOf(TreasuryVaultContract.target)).to.be.equal(swapFee);
-        // // expect(await TreasuryVaultContract.totalCollectedInterests()).to.be.equal(0);
+        // todo: will the initial deposit be at initialization?
+        // expect(await StakedIPContract.rewardsManager()).to.be.equal(RewardsManagerContract.target);
+        // expect(await StakedIPContract.withdrawal()).to.be.equal(WithdrawalContract.target);
+        // expect(await StakedIPContract.totalAssets()).to.be.equal(0);
       });
 
-    //   it(`[T301]-${index + 1} swapAndStakeVerde() [after some deposits].`, async function () {
-    //     const {
-    //       MPETHTokenContract,
-    //       USDTTokenContract,
-    //       BorrowVerdeContract,
-    //       StakedVerdeContract,
-    //       VerdeTokenContract,
-    //       SwapVerdeContract,
-    //       StakedStableContract,
-    //       TreasuryVaultContract,
-    //       alice,
-    //       bob,
-    //       carl
-    //     } = await loadFixture(fixture);
+      it(`[T101]-${index + 1} RewardsManagerContract initial parameters are correct.`, async function () {
+        const {
+          RewardsManagerContract,
+          StakedIPContract,
+          owner,
+          treasury,
+        } = await loadFixture(fixture);
 
-    //     await MPETHTokenContract.connect(alice).approve(BorrowVerdeContract.target, ethers.parseEther("5"));
-    //     await BorrowVerdeContract.connect(alice).depositCollateral(alice.address, ethers.parseEther("5"));
-    //     await MPETHTokenContract.connect(bob).approve(BorrowVerdeContract.target, ethers.parseEther("0.2"));
-    //     await BorrowVerdeContract.connect(bob).depositCollateral(bob.address, ethers.parseEther("0.2"));
-    //     await MPETHTokenContract.connect(carl).approve(BorrowVerdeContract.target, ethers.parseEther("2"));
-    //     await BorrowVerdeContract.connect(carl).depositCollateral(carl.address, ethers.parseEther("2"));
+        expect(await RewardsManagerContract.owner()).to.be.equal(owner.address);
+        expect(await RewardsManagerContract.treasury()).to.be.equal(treasury.address);
+        expect(await RewardsManagerContract.stakedIP()).to.be.equal(StakedIPContract.target);
+        expect(await RewardsManagerContract.rewardsFeeBp()).to.be.equal(500n);
 
-    //     const aliceLoan = 10_000_000_000n; // 10,000 USD
-    //     expect(await BorrowVerdeContract.getSafeLoan(alice.address)).to.be.greaterThanOrEqual(aliceLoan);
-    //     const bobLoan = 505_000_000n; // 505 USD
-    //     expect(await BorrowVerdeContract.getSafeLoan(bob.address)).to.be.greaterThanOrEqual(bobLoan);
-    //     const carlLoan = 2_003_000_000n; // 2,003 USD
-    //     expect(await BorrowVerdeContract.getSafeLoan(carl.address)).to.be.greaterThanOrEqual(carlLoan);
+        const [rewards, treasuryFee] = await RewardsManagerContract.getManagerAccrued()
+        expect(rewards).to.be.equal(0);
+        expect(treasuryFee).to.be.equal(0);
+      });
 
-    //     await BorrowVerdeContract.connect(alice).borrow(aliceLoan);
-    //     await BorrowVerdeContract.connect(bob).borrow(bobLoan);
-    //     await BorrowVerdeContract.connect(carl).borrow(carlLoan);
-    //     const initialBorrowFee = await VerdeTokenContract.balanceOf(TreasuryVaultContract.target);
+      it(`[T102]-${index + 1} WithdrawalContract initial parameters are correct.`, async function () {
+        const {
+          StakedIPContract,
+          WithdrawalContract,
+          owner,
+        } = await loadFixture(fixture);
 
-    //     // console.log("balance: ", await VerdeTokenContract.balanceOf(TreasuryVaultContract.target));
-    //     const oBalance = await VerdeTokenContract.balanceOf(TreasuryVaultContract.target);
-    //     await time.increase(ONE_DAY_IN_SECS_PLUS);
-    //     await BorrowVerdeContract.accrue();
+        expect(await WithdrawalContract.owner()).to.be.equal(owner.address);
+        expect(await WithdrawalContract.stIP()).to.be.equal(StakedIPContract.target);
+        expect(await WithdrawalContract.totalPendingWithdrawals()).to.be.equal(0);
+        expect(await WithdrawalContract.validatorsDisassembleTime()).to.be.equal(14n * ONE_DAY_SECONDS);
+      });
+    });
 
-    //     for (i = 0; i < 365; i++) {
-    //       await time.increase(ONE_DAY_IN_SECS_PLUS);
-    //       await BorrowVerdeContract.accrue();
-    //     }
-    //     const interests = (await VerdeTokenContract.balanceOf(TreasuryVaultContract.target)) - oBalance;
-    //     // console.log("balance: ", await VerdeTokenContract.balanceOf(TreasuryVaultContract.target));
+    // stakedIP
+    // error InvalidZeroAddress();
+    // error LessThanMinDeposit();
+    // error NotEnoughIPSent();
+    // error Unauthorized();
+    // error InvalidOperationsFee();
+    // error NotFullyOperational();
+    // error ValidatorNotListed(bytes _validatorUncmpPubkey);
+    // error OwnableUnauthorizedAccount(address account);
 
-    //     expect(await VerdeTokenContract.balanceOf(alice.address)).to.be.equal(aliceLoan);
-    //     expect(await VerdeTokenContract.balanceOf(bob.address)).to.be.equal(bobLoan);
-    //     expect(await VerdeTokenContract.balanceOf(carl.address)).to.be.equal(carlLoan);
+    // withdrawal
+    // error Unauthorized(address _caller, address _authorized);
+    // error NotEnoughIPtoStake(uint _requested, uint _available);
+    // error ClaimTooSoon(uint timestampUnlock);
+    // error InvalidDisassembleTime(uint valueSent, uint maxValue);
+    // error InvalidRequest();
+    // error InvalidRequestId(address _user, uint _request_id);
+    // error WithdrawAlreadeCompleted(address _user, uint _request_id);
+    // error UserMaxWithdrawalsReached(address _user);
+    // error OwnableUnauthorizedAccount(address account);
+    describe("Trigger all unit errors", function () {
+      it(`[T103]-${index + 1} RewardsManagerContract - InvalidAddressZero().`, async function () {
+        const {
+          RewardsManagerContract,
+          owner,
+          StakedIPContract,
+          treasury,
+        } = await loadFixture(fixture);
 
-    //     await VerdeTokenContract.connect(alice).approve(StakedVerdeContract.target, aliceLoan);
-    //     await VerdeTokenContract.connect(bob).approve(StakedVerdeContract.target, bobLoan);
-    //     await VerdeTokenContract.connect(carl).approve(StakedVerdeContract.target, carlLoan);
+        await expect(
+          RewardsManagerContract.updateTreasury(ethers.ZeroAddress)
+        ).to.be.revertedWithCustomError(RewardsManagerContract, "InvalidAddressZero");
+        expect(await RewardsManagerContract.treasury()).to.be.equal(treasury.address);
 
-    //     // console.log("balance: ", await VerdeTokenContract.balanceOf(TreasuryVaultContract.target));
+        // At deployment:
+        const RewardsManager = await ethers.getContractFactory("RewardsManager");
+        await expect(
+          RewardsManager.deploy(
+            owner.address,
+            ethers.ZeroAddress,
+            treasury.address,
+            500n
+          )
+        ).to.be.revertedWithCustomError(RewardsManager, "InvalidAddressZero");
 
-    //     // console.log(await StakedVerdeContract.totalAssets(), await StakedVerdeContract.totalSupply());
-    //     expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
-    //     await StakedVerdeContract.connect(alice).deposit(aliceLoan, alice.address);
-    //     expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
-    //     await StakedVerdeContract.connect(bob).deposit(bobLoan, bob.address);
-    //     expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
-    //     await StakedVerdeContract.connect(carl).deposit(carlLoan, carl.address);
-    //     expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
+        await expect(
+          RewardsManager.deploy(
+            owner.address,
+            StakedIPContract.target,
+            ethers.ZeroAddress,
+            500n
+          )
+        ).to.be.revertedWithCustomError(RewardsManager, "InvalidAddressZero");
+      });
 
-    //     expect(await StakedVerdeContract.balanceOf(alice.address)).to.be.equal(aliceLoan);
-    //     expect(await StakedVerdeContract.balanceOf(bob.address)).to.be.equal(bobLoan);
-    //     expect(await StakedVerdeContract.balanceOf(carl.address)).to.be.equal(carlLoan);
+      it(`[T104]-${index + 1} RewardsManagerContract - InvalidRewardsFee().`, async function () {
+        const {
+          RewardsManagerContract,
+          StakedIPContract,
+          owner,
+          treasury,
+        } = await loadFixture(fixture);
 
-    //     /// --- adding liquidity.
-    //     expect(await SwapVerdeContract.getStableLiquidity()).to.be.equal(0);
-    //     const aliceUSDTBalance = await USDTTokenContract.balanceOf(alice.address);
-    //     expect(await StakedVerdeContract.balanceOf(alice.address)).to.be.equal(aliceLoan);
+        const MAX_REWARDS_FEE = 4000n;
 
-    //     expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
-    //     await USDTTokenContract.connect(alice).approve(StakedStableContract.target, aliceUSDTBalance);
-    //     await StakedStableContract.connect(alice).swapAndStakeVerde(SwapVerdeContract.target, aliceUSDTBalance, 0);
-    //     expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
-    //     const [previewVerde, swapFee] = await SwapVerdeContract.previewStableToVerde(aliceUSDTBalance);
-    //     expect(await StakedVerdeContract.balanceOf(alice.address) - aliceLoan).to.be.equal(
-    //       await StakedVerdeContract.previewDeposit(previewVerde)
-    //     );
-    //     expect(await SwapVerdeContract.getStableLiquidity()).to.be.equal(aliceUSDTBalance);
+        await expect(
+          RewardsManagerContract.updateRewardsFee(MAX_REWARDS_FEE + 1n)
+        ).to.be.revertedWithCustomError(RewardsManagerContract, "InvalidRewardsFee");
+        expect(await RewardsManagerContract.rewardsFeeBp()).to.be.equal(500n);
 
-    //     // fees
-    //     expect(await VerdeTokenContract.balanceOf(TreasuryVaultContract.target)).to.be.equal(
-    //       interests + initialBorrowFee + swapFee
-    //     );
-    //   });
+        // At deployment:
+        const RewardsManager = await ethers.getContractFactory("RewardsManager");
+        await expect(
+          RewardsManager.deploy(
+            owner.address,
+            StakedIPContract.target,
+            treasury.address,
+            MAX_REWARDS_FEE + 1n
+          )
+        ).to.be.revertedWithCustomError(RewardsManager, "InvalidRewardsFee");
+      });
 
-    //   it(`[T302]-${index + 1} swapAndStakeVerde() [after some deposits and price increase].`, async function () {
-    //     const {
-    //       MPETHTokenContract,
-    //       USDTTokenContract,
-    //       BorrowVerdeContract,
-    //       StakedVerdeContract,
-    //       VerdeTokenContract,
-    //       SwapVerdeContract,
-    //       StakedStableContract,
-    //       TreasuryVaultContract,
-    //       owner,
-    //       alice,
-    //       bob,
-    //       carl,
-    //       bot
-    //     } = await loadFixture(fixture);
+      it(`[T105]-${index + 1} RewardsManagerContract - OwnableUnauthorizedAccount().`, async function () {
+        const {
+          RewardsManagerContract,
+          alice,
+        } = await loadFixture(fixture);
 
-    //     await MPETHTokenContract.connect(alice).approve(BorrowVerdeContract.target, ethers.parseEther("5"));
-    //     await BorrowVerdeContract.connect(alice).depositCollateral(alice.address, ethers.parseEther("5"));
-    //     await MPETHTokenContract.connect(bob).approve(BorrowVerdeContract.target, ethers.parseEther("0.2"));
-    //     await BorrowVerdeContract.connect(bob).depositCollateral(bob.address, ethers.parseEther("0.2"));
-    //     await MPETHTokenContract.connect(carl).approve(BorrowVerdeContract.target, ethers.parseEther("2"));
-    //     await BorrowVerdeContract.connect(carl).depositCollateral(carl.address, ethers.parseEther("2"));
+        await expect(
+          RewardsManagerContract.connect(alice).updateTreasury(alice.address)
+        ).to.be.revertedWithCustomError(RewardsManagerContract, "OwnableUnauthorizedAccount");
+        await expect(
+          RewardsManagerContract.connect(alice).updateRewardsFee(501n)
+        ).to.be.revertedWithCustomError(RewardsManagerContract, "OwnableUnauthorizedAccount");
+      });
 
-    //     const aliceLoan = 10_000_000_000n; // 10,000 USD
-    //     expect(await BorrowVerdeContract.getSafeLoan(alice.address)).to.be.greaterThanOrEqual(aliceLoan);
-    //     const bobLoan = 505_000_000n; // 505 USD
-    //     expect(await BorrowVerdeContract.getSafeLoan(bob.address)).to.be.greaterThanOrEqual(bobLoan);
-    //     const carlLoan = 2_003_000_000n; // 2,003 USD
-    //     expect(await BorrowVerdeContract.getSafeLoan(carl.address)).to.be.greaterThanOrEqual(carlLoan);
+      it(`[T106]-${index + 1} StakedIPContract - InvalidZeroAmount().`, async function () {
+        const {
+          StakedIPContract,
+          alice,
+        } = await loadFixture(fixture);
 
-    //     await BorrowVerdeContract.connect(alice).borrow(aliceLoan);
-    //     await BorrowVerdeContract.connect(bob).borrow(bobLoan);
-    //     await BorrowVerdeContract.connect(carl).borrow(carlLoan);
-    //     const initialBorrowFee = await VerdeTokenContract.balanceOf(TreasuryVaultContract.target);
+        await expect(
+          StakedIPContract.connect(alice).depositIP(alice.address, {value: 0})
+        ).to.be.revertedWithCustomError(StakedIPContract, "InvalidZeroAmount");
 
-    //     // console.log("balance: ", await VerdeTokenContract.balanceOf(TreasuryVaultContract.target));
-    //     const oBalance = await VerdeTokenContract.balanceOf(TreasuryVaultContract.target);
-    //     await time.increase(ONE_DAY_IN_SECS_PLUS);
-    //     await BorrowVerdeContract.accrue();
+        await expect(
+          StakedIPContract.connect(alice).injectRewards({value: 0})
+        ).to.be.revertedWithCustomError(StakedIPContract, "InvalidZeroAmount");
 
-    //     for (i = 0; i < 365; i++) {
-    //       await time.increase(ONE_DAY_IN_SECS_PLUS);
-    //       await BorrowVerdeContract.accrue();
-    //     }
-    //     const interests = (await VerdeTokenContract.balanceOf(TreasuryVaultContract.target)) - oBalance;
-    //     // console.log("balance: ", await VerdeTokenContract.balanceOf(TreasuryVaultContract.target));
+        await expect(
+          StakedIPContract.connect(alice).withdraw(0, alice.address, alice.address)
+        ).to.be.revertedWithCustomError(StakedIPContract, "InvalidZeroAmount");
+      });
 
-    //     expect(await VerdeTokenContract.balanceOf(alice.address)).to.be.equal(aliceLoan);
-    //     expect(await VerdeTokenContract.balanceOf(bob.address)).to.be.equal(bobLoan);
-    //     expect(await VerdeTokenContract.balanceOf(carl.address)).to.be.equal(carlLoan);
+      it(`[T107]-${index + 1} StakedIPContract - InvalidZeroAddress().`, async function () {
+        const {
+          StakedIPContract,
+          FEE,
+          owner,
+        } = await loadFixture(fixture);
 
-    //     await VerdeTokenContract.connect(alice).approve(StakedVerdeContract.target, aliceLoan);
-    //     await VerdeTokenContract.connect(bob).approve(StakedVerdeContract.target, bobLoan);
-    //     await VerdeTokenContract.connect(carl).approve(StakedVerdeContract.target, carlLoan);
+        await expect(
+          StakedIPContract.connect(owner).updateWithdrawal(ethers.ZeroAddress, { value: FEE })
+        ).to.be.revertedWithCustomError(StakedIPContract, "InvalidZeroAddress");
 
-    //     // console.log(await StakedVerdeContract.totalAssets(), await StakedVerdeContract.totalSupply());
-    //     expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
-    //     await StakedVerdeContract.connect(alice).deposit(aliceLoan, alice.address);
-    //     expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
-    //     await StakedVerdeContract.connect(bob).deposit(bobLoan, bob.address);
-    //     expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
-    //     await StakedVerdeContract.connect(carl).deposit(carlLoan, carl.address);
+        await expect(
+          StakedIPContract.connect(owner).updateRewardsManager(ethers.ZeroAddress, { value: FEE })
+        ).to.be.revertedWithCustomError(StakedIPContract, "InvalidZeroAddress");
 
-    //     expect(await StakedVerdeContract.balanceOf(alice.address)).to.be.equal(aliceLoan);
-    //     expect(await StakedVerdeContract.balanceOf(bob.address)).to.be.equal(bobLoan);
-    //     expect(await StakedVerdeContract.balanceOf(carl.address)).to.be.equal(carlLoan);
-
-    //     /// --- stVERDE price increase.
-    //     // console.log("fees: ", await VerdeTokenContract.balanceOf(TreasuryVaultContract.target));
-    //     // console.log("inte: ", initialInterest);
-    //     expect(await VerdeTokenContract.balanceOf(TreasuryVaultContract.target)).to.be.equal(initialBorrowFee + interests);
-    //     expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
-    //     // console.log("assets before: ", await StakedVerdeContract.totalAssets());
-    //     // console.log("assets sum   : ", (await StakedVerdeContract.totalAssets()) + initialInterest);
-    //     // console.log("is auth: ", await TreasuryVaultContract.isAuthorizedBot(alice.address));
-    //     await expect(
-    //       TreasuryVaultContract.connect(alice).transferVerde(
-    //         StakedVerdeContract.target,
-    //         initialBorrowFee + interests,
-    //       )
-    //     ).to.be.revertedWithCustomError(TreasuryVaultContract, "AuthBotUnauthorized");
-    //     await TreasuryVaultContract.connect(owner).grantBot(bot.address)
-
-    //     await expect(
-    //       TreasuryVaultContract.connect(bot).transferVerde(
-    //         StakedVerdeContract.target,
-    //         initialBorrowFee + interests,
-    //       )
-    //     ).to.be.revertedWithCustomError(TreasuryVaultContract, "InvalidFundReceiver");
-    //     await TreasuryVaultContract.connect(owner).addValidReceiver(StakedVerdeContract.target)
-
-    //     await TreasuryVaultContract.connect(bot).transferVerde(
-    //       StakedVerdeContract.target,
-    //       initialBorrowFee + interests,
-    //     );
-    //     // console.log("assets after : ", await StakedVerdeContract.totalAssets());
-    //     expect((await StakedVerdeContract.totalAssets()) - (initialBorrowFee + interests)).to.be.equal(await StakedVerdeContract.totalSupply());
-
-    //     /// --- adding liquidity.
-    //     expect(await SwapVerdeContract.getStableLiquidity()).to.be.equal(0);
-    //     const aliceUSDTBalance = await USDTTokenContract.balanceOf(alice.address);
-    //     expect(await StakedVerdeContract.balanceOf(alice.address)).to.be.equal(aliceLoan);
-
-    //     expect(await StakedVerdeContract.convertToAssets(ethers.parseUnits("10", 6))).to.be.greaterThan(ethers.parseUnits("10", 6));
-    //     await USDTTokenContract.connect(alice).approve(StakedStableContract.target, aliceUSDTBalance);
-
-    //     const [previewVerde, swapFee] = await SwapVerdeContract.previewStableToVerde(aliceUSDTBalance);
-    //     const beforeSwap = await StakedVerdeContract.previewDeposit(previewVerde);
-    //     await StakedStableContract.connect(alice).swapAndStakeVerde(SwapVerdeContract.target, aliceUSDTBalance, 0);
-    //     expect(await StakedVerdeContract.balanceOf(alice.address) - aliceLoan).to.be.equal(beforeSwap);
-    //     expect(await SwapVerdeContract.getStableLiquidity()).to.be.equal(
-    //       aliceUSDTBalance
-    //     );
-
-    //     // fees
-    //     expect(await VerdeTokenContract.balanceOf(TreasuryVaultContract.target)).to.be.equal(swapFee);
-    //   });
-
-    //   it(`[T303]-${index + 1} unstakeAndSwapStable() [initial deposit and withdraw].`, async function () {
-    //     const {
-    //       USDTTokenContract,
-    //       SwapVerdeContract,
-    //       TreasuryVaultContract,
-    //       StakedVerdeContract,
-    //       StakedStableContract,
-    //       alice,
-    //     } = await loadFixture(fixture);
-
-    //     const aliceUSDTBalance = await USDTTokenContract.balanceOf(alice.address);
-    //     expect(await StakedVerdeContract.balanceOf(alice.address)).to.be.equal(0);
-
-    //     /// deposit
-    //     expect(await StakedVerdeContract.totalAssets()).to.be.equal(await StakedVerdeContract.totalSupply());
-    //     await USDTTokenContract.connect(alice).approve(StakedStableContract.target, aliceUSDTBalance);
-    //     await StakedStableContract.connect(alice).swapAndStakeVerde(SwapVerdeContract.target, aliceUSDTBalance, 0);
-    //     const [previewVerde, ] = await SwapVerdeContract.previewStableToVerde(aliceUSDTBalance);
-    //     expect(await StakedVerdeContract.balanceOf(alice.address)).to.be.equal(
-    //       await StakedVerdeContract.previewDeposit(previewVerde)
-    //     );
-
-    //     /// withdraw
-    //     const aliceSTVERDEAbalance = await StakedVerdeContract.balanceOf(alice.address);
-    //     await StakedVerdeContract.connect(alice).approve(StakedStableContract.target, aliceSTVERDEAbalance);
-    //     await StakedStableContract.connect(alice).unstakeAndSwapStable(
-    //       SwapVerdeContract.target,
-    //       aliceSTVERDEAbalance,
-    //       0
-    //     );
-    //   });
-    // });
-
-    // describe("Trigger all unit errors", function () {
-    //   it(`[T304]-${index + 1} UnknownSwapProtocol() - swapAndStakeVerde and unstakeAndSwapStable [invalid swap protocol].`, async function () {
-    //     const {
-    //       USDTTokenContract,
-    //       InvalidSwapVerdeContract,
-    //       StakedStableContract,
-    //       alice,
-    //     } = await loadFixture(fixture);
-
-    //     const aliceUSDTBalance = await USDTTokenContract.balanceOf(alice.address);
-
-    //     await USDTTokenContract.connect(alice).approve(StakedStableContract.target, aliceUSDTBalance);
-    //     await expect(
-    //       StakedStableContract.connect(alice).swapAndStakeVerde(InvalidSwapVerdeContract.target, aliceUSDTBalance, 0)
-    //     ).to.be.revertedWithCustomError(StakedStableContract, "UnknownSwapProtocol");
-
-    //     await expect(
-    //       StakedStableContract.connect(alice).unstakeAndSwapStable(InvalidSwapVerdeContract.target, aliceUSDTBalance, 0)
-    //     ).to.be.revertedWithCustomError(StakedStableContract, "UnknownSwapProtocol");
-    //   });
+        await expect(
+          StakedIPContract.connect(owner).updateOperator(ethers.ZeroAddress)
+        ).to.be.revertedWithCustomError(StakedIPContract, "InvalidZeroAddress");
+      });
     });
   });
 });

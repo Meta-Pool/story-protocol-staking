@@ -22,6 +22,9 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     using Address for address payable;
     using SafeERC20 for IERC20;
 
+    /// @dev Absolute minimum deposit amount. Cannot be lower.
+    uint256 constant private MIN_DEPOSIT_AMOUNT = 1 gwei;
+
     // IStakedIPVaultOperations public operations;
     uint public minDepositAmount;
     uint public totalUnderlying;
@@ -41,6 +44,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     event CoverWithdrawals(address _caller, uint _amount);
 
     error InvalidZeroAmount();
+    error InvalidZeroAddress();
     error LessThanMinDeposit();
     error NotEnoughIPSent();
     error Unauthorized();
@@ -120,6 +124,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     // ***************************
 
     function updateWithdrawal(address _withdrawal) external payable onlyOwner checkStakingOperationsFee {
+        require(_withdrawal != address(0), InvalidZeroAddress());
         withdrawal = _withdrawal;
         IIPTokenStaking(ipTokenStaking).setWithdrawalAddress{ value: msg.value }(_withdrawal);
 
@@ -127,6 +132,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     }
 
     function updateRewardsManager(address _rewardsManager) external payable onlyOwner checkStakingOperationsFee {
+        require(_rewardsManager != address(0), InvalidZeroAddress());
         rewardsManager = _rewardsManager;
         IIPTokenStaking(ipTokenStaking).setRewardsAddress{ value: msg.value }(_rewardsManager);
 
@@ -141,12 +147,14 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     }
 
     function updateMinDepositAmount(uint _amount) public onlyOwner {
+        require(_amount >= MIN_DEPOSIT_AMOUNT, LessThanMinDeposit());
         minDepositAmount = _amount;
 
         emit UpdateMinDepositAmount(msg.sender, _amount);
     }
 
     function updateOperator(address _newOperator) public onlyOwner {
+        require(_newOperator != address(0), InvalidZeroAddress());
         operator = _newOperator;
 
         emit UpdateOperator(msg.sender, _newOperator);
@@ -170,6 +178,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
 
     /// @dev Assets increases as rewards are received by rewardsManager and later re-staked burning his shares
     function totalAssets() public view override returns (uint) {
+        require(rewardsManager != address(0), "RewardsManager not set");
         (uint rewards, ) = IRewardsManager(rewardsManager).getManagerAccrued();
         return totalUnderlying + rewards;
     }

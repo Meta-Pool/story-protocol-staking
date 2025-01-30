@@ -43,6 +43,7 @@ contract RewardsManager is IRewardsManager, Ownable, ReentrancyGuard {
         address _treasury,
         uint256 _rewardsFeeBp
     ) Ownable(_owner) ReentrancyGuard() checkRewards(_rewardsFeeBp) {
+        require(_treasury != address(0) && _stakedIP != address(0), InvalidAddressZero());
         stakedIP = _stakedIP;
         treasury = _treasury;
         rewardsFeeBp = _rewardsFeeBp;

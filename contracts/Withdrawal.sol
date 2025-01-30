@@ -17,18 +17,22 @@ struct WithdrawRequest {
 
 /// @title Manage withdrawals from validators to users
 /// @notice Receive request for withdrawals from StakedIP and allow users to complete the withdrawals once the unlock timestamp is reached
-/// @dev As the disassemble of validators is delayed, this contract manage the pending withdraw from users to allow the to complet it once his unlockTimestamp is reached and if the contract has enough IP
+/// @dev As the disassemble of validators is delayed, this contract manage the pending withdraw from users to allow the to complete it once his unlockTimestamp is reached and if the contract has enough IP
 
 contract Withdrawal is OwnableUpgradeable, IWithdrawal {
     using Address for address payable;
     using SafeERC20 for IERC20;
 
-    address payable public stIP;
-    // How much requested withdrawals are pending to complete
-    uint public totalPendingWithdrawals;
     uint8 public constant MAX_WITHDRAWALS_PER_USER = 4;
     uint32 public constant MAX_VALIDATORS_DISASSEMBLE_TIME = 90 days;
+
+    address payable public stIP;
+
+    // How much requested withdrawals are pending to complete
+    uint256 public totalPendingWithdrawals;
     uint32 public validatorsDisassembleTime;
+
+    // todo: why not private and allow a function to get the 4 pending withdrawals?
     mapping(address => WithdrawRequest[MAX_WITHDRAWALS_PER_USER]) public userPendingWithdrawals;
 
     event RequestWithdraw(address indexed user, uint id, uint amount, address receiver, uint unlockTimestamp);
