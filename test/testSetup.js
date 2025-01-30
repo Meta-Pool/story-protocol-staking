@@ -155,6 +155,7 @@ async function deployStoryPoolFixture() {
 
 module.exports = {
   ONE_DAY_SECONDS,
+  DUMMY_VALIDATOR_SET,
   MLARGE,
   GWEI,
   deployStoryPoolFixture,

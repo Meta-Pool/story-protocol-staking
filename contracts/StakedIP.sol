@@ -46,8 +46,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     error InvalidZeroAmount();
     error InvalidZeroAddress();
     error LessThanMinDeposit();
-    error NotEnoughIPSent();
-    error Unauthorized();
+    // error NotEnoughIPSent(); // not used
+    error OperatorUnauthorized();
     error InvalidOperationsFee();
     error NotFullyOperational();
     error ValidatorNotListed(bytes _validatorUncmpPubkey);
@@ -102,7 +102,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     }
 
     modifier onlyOperator() {
-        if (msg.sender != operator) revert Unauthorized();
+        require(msg.sender == operator, OperatorUnauthorized());
         _;
     }
 

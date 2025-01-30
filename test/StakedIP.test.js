@@ -4,6 +4,7 @@ const { loadFixture, time } = require("@nomicfoundation/hardhat-network-helpers"
 const {
   deployStoryPoolFixture,
   ONE_DAY_SECONDS,
+  DUMMY_VALIDATOR_SET,
   GWEI,
 } = require("./testSetup");
 
@@ -78,9 +79,7 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
     });
 
     // stakedIP
-    // error LessThanMinDeposit();
-    // error NotEnoughIPSent();
-    // error Unauthorized();
+    // error OperatorUnauthorized();
     // error InvalidOperationsFee();
     // error NotFullyOperational();
     // error ValidatorNotListed(bytes _validatorUncmpPubkey);
@@ -229,6 +228,59 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
         await expect(
           StakedIPContract.connect(alice).depositIP(alice.address, { value: (await StakedIPContract.minDepositAmount()) - 1n })
         ).to.be.revertedWithCustomError(StakedIPContract, "LessThanMinDeposit");
+      });
+
+      it(`[T109]-${index + 1} StakedIPContract - OperatorUnauthorized().`, async function () {
+        const {
+          StakedIPContract,
+          owner,
+          FEE,
+          alice,
+          operator,
+        } = await loadFixture(fixture);
+
+        await expect(
+          StakedIPContract.connect(alice).coverWithdrawals(GWEI)
+        ).to.be.revertedWithCustomError(StakedIPContract, "OperatorUnauthorized");
+
+        await expect(
+          StakedIPContract.connect(alice).stake(
+            // bytes calldata _validatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[0].publicKey,
+            // uint _amount,
+            ethers.parseEther("1"),
+            // IIPTokenStaking.StakingPeriod _period,
+            1,
+            // bytes calldata _extraData
+            "0x",
+          )
+        ).to.be.revertedWithCustomError(StakedIPContract, "OperatorUnauthorized");
+
+        await expect(
+          StakedIPContract.connect(alice).unstake(
+            //     bytes calldata _validatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[0].publicKey,
+            //     uint _amount,
+            ethers.parseEther("1"),
+            //     uint _delegation_id,
+            1,
+            //     bytes calldata _extraData
+            "0x",
+          )
+        ).to.be.revertedWithCustomError(StakedIPContract, "OperatorUnauthorized");
+
+        await expect(
+          StakedIPContract.connect(alice).redelegate(
+            // bytes calldata _oldValidatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[0].publicKey,
+            // bytes calldata _newValidatorUncmpPubkey,
+            DUMMY_VALIDATOR_SET[1].publicKey,
+            // uint _amount,
+            ethers.parseEther("1"),
+            // uint _delegation_id
+            1,
+          )
+        ).to.be.revertedWithCustomError(StakedIPContract, "OperatorUnauthorized");
       });
     });
   });
