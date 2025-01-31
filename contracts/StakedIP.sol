@@ -34,6 +34,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     address public withdrawal;
     bool public fullyOperational;
 
+    bool private setupExecuted;
+
     event Stake(address _caller, bytes indexed _validator, uint _delegation_id, uint _amount, bytes _extraData);
     event Unstake(address _caller, bytes indexed _validator, uint _amount, uint _delegation_id, bytes _extraData);
     event UpdateMinDepositAmount(address _caller, uint _new);
@@ -46,7 +48,6 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     error InvalidZeroAmount();
     error InvalidZeroAddress();
     error LessThanMinDeposit();
-    // error NotEnoughIPSent(); // not used
     error OperatorUnauthorized();
     error InvalidIPFee();
     error NotFullyOperational();
@@ -58,8 +59,11 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     error ArraySizeMismatch();
     error ValidatorNotFount(bytes _validator);
     error ValidatorsEmptyList();
+    error SetupAlreadyExecuted();
+    error SetupInvalidIPValue();
+    error HasStaking();
 
-    /// todo: auditors usually recommend to _disableInitializers().
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() { _disableInitializers(); }
 
     function initialize(
@@ -73,13 +77,12 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         bytes[] calldata _validatorsPubkey,
         uint16[] calldata _validatorsStakePercent
     ) public initializer {
-        __Ownable_init(_owner);
+        __Ownable_init(msg.sender); // First allow deployer to update
         __ERC4626_init(_asset);
         __ERC20_init(_stIPName, _stIPSymbol);
 
         updateOperator(_operator);
         updateMinDepositAmount(_minDepositAmount);
-        // operations = _operations;
 
         ipTokenStaking = _ipTokenStaking;
 
@@ -87,14 +90,34 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
             _insertValidator(_validatorsPubkey[i]);
         }
         _updateValidatorsTarget(_validatorsStakePercent);
+        __Ownable_init(_owner);
+    }
 
+    /// @notice Setup contracts and makes first stake
+    /// @dev To set withdrawal and reward addresses into Story is required to have at least one stake.  This function run only once. Separated from initialize as openzeppeling does not allow to call as payable.
+    /// https://github.com/OpenZeppelin/openzeppelin-upgrades/issues/953
+    function setupStaking(address _owner, address _withdrawal, address _rewardsManager, bytes calldata _validatorUncmpPubkey, IIPTokenStaking.StakingPeriod _period) external payable onlyOwner {
+        require(!setupExecuted, SetupAlreadyExecuted());
+        require(totalUnderlying == 0, HasStaking());
+        uint256 fee = IIPTokenStaking(ipTokenStaking).fee();
+        uint256 minStake = IIPTokenStaking(ipTokenStaking).minStakeAmount();
+        require(msg.value == fee + minStake, SetupInvalidIPValue());
+        
         toggleContractOperation();
-        /// TODO: Can we make the initializer payable to avoid this?
-        /*
-        withdrawal and rewards addresses aren't settled at deployment
-        as story will ignore setting addresses without previous staking.
-        After deployment must stake and update addresses
-        */
+        rewardsManager = _rewardsManager; // Needed to deposit
+        this.depositIP{ value: minStake }(msg.sender);
+
+        address _operator = operator;
+        operator = address(this); // Temp operator permission for first stake
+        this.stake(_validatorUncmpPubkey, minStake, _period, "");
+        operator = _operator;
+
+        updateWithdrawal(_withdrawal);
+        updateRewardsManager(_rewardsManager);
+
+        transferOwnership(_owner);
+
+        setupExecuted = true;
     }
 
     receive() external payable {
@@ -127,7 +150,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     // * Update Params Functions *
     // ***************************
 
-    function updateWithdrawal(address _withdrawal) external payable onlyOwner checkStakingOperationsFee {
+    function updateWithdrawal(address _withdrawal) public payable onlyOwner checkStakingOperationsFee {
         require(_withdrawal != address(0), InvalidZeroAddress());
         withdrawal = _withdrawal;
         IIPTokenStaking(ipTokenStaking).setWithdrawalAddress{ value: msg.value }(_withdrawal);
@@ -135,7 +158,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         emit UpdateWithdrawal(msg.sender, _withdrawal);
     }
 
-    function updateRewardsManager(address _rewardsManager) external payable onlyOwner checkStakingOperationsFee {
+    function updateRewardsManager(address _rewardsManager) public payable onlyOwner checkStakingOperationsFee {
         require(_rewardsManager != address(0), InvalidZeroAddress());
         rewardsManager = _rewardsManager;
         IIPTokenStaking(ipTokenStaking).setRewardsAddress{ value: msg.value }(_rewardsManager);
@@ -182,7 +205,6 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
 
     /// @dev Assets increases as rewards are received by rewardsManager and later re-staked burning his shares
     function totalAssets() public view override returns (uint) {
-        require(rewardsManager != address(0), "RewardsManager not set");
         (uint rewards, ) = IRewardsManager(rewardsManager).getManagerAccrued();
         return totalUnderlying + rewards;
     }

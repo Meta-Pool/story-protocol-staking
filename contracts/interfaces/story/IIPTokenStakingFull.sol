@@ -5,4 +5,6 @@ import { IIPTokenStaking } from './IIPTokenStaking.sol';
 
 interface IIPTokenStakingFull is IIPTokenStaking {
     function fee() external view returns (uint256);
+
+    function minStakeAmount() external view returns (uint256);
 }
