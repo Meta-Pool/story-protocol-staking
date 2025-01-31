@@ -6,7 +6,9 @@
         "keccak",
         "redelegate",
         "Reentrancy",
+        "Restake",
         "Uncmp",
-        "Unstake"
+        "Unstake",
+        "unstaking"
     ]
 }

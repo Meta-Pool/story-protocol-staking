@@ -33,12 +33,12 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
         expect(await StakedIPContract.fullyOperational()).to.be.equal(true);
 
         expect(await StakedIPContract.minDepositAmount()).to.be.equal(ethers.parseEther("1"));
-        expect(await StakedIPContract.totalUnderlying()).to.be.equal(0);
+        expect(await StakedIPContract.totalUnderlying()).to.be.equal(await IPTokenStakingContract.minStakeAmount());
         expect(await StakedIPContract.ipTokenStaking()).to.be.equal(IPTokenStakingContract.target);
         expect(await StakedIPContract.operator()).to.be.equal(operator.address);
 
         expect(await StakedIPContract.asset()).to.be.equal(WIPContract.target);
-        expect(await StakedIPContract.totalSupply()).to.be.equal(0);
+        expect(await StakedIPContract.totalSupply()).to.be.equal(await IPTokenStakingContract.minStakeAmount());
 
         // todo: will the initial deposit be at initialization?
         // expect(await StakedIPContract.rewardsManager()).to.be.equal(RewardsManagerContract.target);
@@ -88,7 +88,7 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
         } = await loadFixture(fixture);
 
         await expect(
-          RewardsManagerContract.updateTreasury(ethers.ZeroAddress)
+          RewardsManagerContract.connect(owner).updateTreasury(ethers.ZeroAddress)
         ).to.be.revertedWithCustomError(RewardsManagerContract, "InvalidAddressZero");
         expect(await RewardsManagerContract.treasury()).to.be.equal(treasury.address);
 
@@ -124,7 +124,7 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
         const MAX_REWARDS_FEE = 4000n;
 
         await expect(
-          RewardsManagerContract.updateRewardsFee(MAX_REWARDS_FEE + 1n)
+          RewardsManagerContract.connect(owner).updateRewardsFee(MAX_REWARDS_FEE + 1n)
         ).to.be.revertedWithCustomError(RewardsManagerContract, "InvalidRewardsFee");
         expect(await RewardsManagerContract.rewardsFeeBp()).to.be.equal(500n);
 

@@ -83,6 +83,7 @@ async function deployStoryPoolFixture() {
   const IPTokenStaking = await ethers.getContractFactory("IPTokenStaking");
 
   const [
+    deployer,
     owner,
     operator,
     treasury,
@@ -119,10 +120,14 @@ async function deployStoryPoolFixture() {
   );
   await IPTokenStakingContract.waitForDeployment();
 
+  const FEE = await IPTokenStakingContract.fee();
+
   const StakedIPContract = await upgrades.deployProxy(
     StakedIP,
     [ 
-      // address _ipTokenStaking,
+      // address _operator,
+      operator.address,
+      // IIPTokenStaking _ipTokenStaking,
       IPTokenStakingContract.target,
       // IERC20 _asset,
       WIPContract.target,
@@ -130,12 +135,8 @@ async function deployStoryPoolFixture() {
       "Staked IP Token",
       // string memory _stIPSymbol,
       "stIP",
-      // uint _minDepositAmount,
+      // uint256 _minDepositAmount,
       ethers.parseUnits("1", 18),
-      // address _operator,
-      operator.address,
-      // address _owner,
-      owner.address,
       // bytes[] calldata _validatorsPubkey,
       [
         DUMMY_VALIDATOR_SET[0].publicKey,
@@ -166,8 +167,10 @@ async function deployStoryPoolFixture() {
 
   const WithdrawalContract = await upgrades.deployProxy(
     Withdrawal,
-    [ 
-      // address payable _stIP
+    [
+      // address _owner,
+      owner.address,
+      // address payable _stIP,
       StakedIPContract.target,
     ],
     {
@@ -177,11 +180,24 @@ async function deployStoryPoolFixture() {
   );
   await WithdrawalContract.waitForDeployment();
 
-  const FEE = await IPTokenStakingContract.fee();
+  await StakedIPContract.setupStaking(
+    // address _owner,
+    owner.address,
+    // address _withdrawal,
+    WithdrawalContract.target,
+    // address _rewardsManager,
+    RewardsManagerContract.target,
+    // bytes calldata _validatorUncmpPubkey,
+    DUMMY_VALIDATOR_SET[0].publicKey,
+    // IIPTokenStaking.StakingPeriod _period
+    0,
+    { value: FEE + FEE + (await IPTokenStakingContract.minStakeAmount()) }
+  );
+
 
   // todo: will the initial deposit be at initialization?
-  await StakedIPContract.updateRewardsManager(RewardsManagerContract.target, { value: FEE });
-  await StakedIPContract.updateWithdrawal(WithdrawalContract.target, { value: FEE });
+  // await StakedIPContract.updateRewardsManager(RewardsManagerContract.target, { value: FEE });
+  // await StakedIPContract.updateWithdrawal(WithdrawalContract.target, { value: FEE });
 
   return {
     IPTokenStakingContract,
