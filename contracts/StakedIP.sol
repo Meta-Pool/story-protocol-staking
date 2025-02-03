@@ -15,7 +15,7 @@ import '@openzeppelin/contracts/utils/math/Math.sol';
 import { IIPTokenStakingFull as IIPTokenStaking } from './interfaces/story/IIPTokenStakingFull.sol';
 
 struct Validator {
-    bytes uncmpPubkey;
+    bytes cmpPubkey; // 33 bytes compressed secp256k1 public key
     uint16 targetStakePercent;
 }
 
@@ -67,7 +67,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     event CoverWithdrawals(address _caller, uint256 _amount);
     event InsertValidator(bytes _validator);
     event RemoveValidator(bytes _validator);
-    event ReplaceValidator(bytes _oldValidatorUncmpPubkey, bytes _newValidatorUncmpPubkey);
+    event ReplaceValidator(bytes _oldValidatorCmpPubkey, bytes _newValidatorCmpPubkey);
     event Stake(address _caller, bytes indexed _validator, uint256 _delegation_id, uint256 _amount, bytes _extraData);
     event Unstake(address _caller, bytes indexed _validator, uint256 _amount, uint256 _delegation_id, bytes _extraData);
     event UpdateContractOperation(address _caller, bool _newValue);
@@ -93,7 +93,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     error ValidatorAlreadyListed(bytes _invalidValidator);
     error ValidatorHasTargetPercent(Validator _validator);
     error ValidatorNotFount(bytes _validator);
-    error ValidatorNotListed(bytes _validatorUncmpPubkey);
+    error ValidatorNotListed(bytes _validatorCmpPubkey);
     error ValidatorsEmptyList();
 
     modifier onlyFullyOperational() {
@@ -111,13 +111,13 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         _;
     }
 
-    modifier checkValidatorExists(bytes calldata _validatorUncmpPubkey) {
-        require(isValidatorListed(_validatorUncmpPubkey), ValidatorNotListed(_validatorUncmpPubkey));
+    modifier checkValidatorExists(bytes calldata _validatorCmpPubkey) {
+        require(isValidatorListed(_validatorCmpPubkey), ValidatorNotListed(_validatorCmpPubkey));
         _;
     }
 
-    modifier checkDuplicatedValidator(bytes memory _validatorUncmpPubkey) {
-        require(!isValidatorListed(_validatorUncmpPubkey), ValidatorAlreadyListed(_validatorUncmpPubkey));
+    modifier checkDuplicatedValidator(bytes memory _validatorCmpPubkey) {
+        require(!isValidatorListed(_validatorCmpPubkey), ValidatorAlreadyListed(_validatorCmpPubkey));
         _;
     }
 
@@ -160,7 +160,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         address _owner,
         address _withdrawal,
         address _rewardsManager,
-        bytes calldata _validatorUncmpPubkey,
+        bytes calldata _validatorCmpPubkey,
         IIPTokenStaking.StakingPeriod _period
     ) external payable onlyOwner {
         require(
@@ -169,7 +169,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         );
         require(!setupExecuted, SetupAlreadyExecuted());
         require(totalUnderlying == 0, HasStaking());
-        require(isValidatorListed(_validatorUncmpPubkey), ValidatorNotListed(_validatorUncmpPubkey));
+        require(isValidatorListed(_validatorCmpPubkey), ValidatorNotListed(_validatorCmpPubkey));
 
         uint256 fee = ipTokenStaking.fee();
         uint256 minStake = ipTokenStaking.minStakeAmount();
@@ -177,21 +177,22 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
 
         fullyOperational = true;
 
-        // updateWithdrawal(_withdrawal);
-        withdrawal = _withdrawal;
-        ipTokenStaking.setWithdrawalAddress{ value: fee }(_withdrawal);
-
-        // updateRewardsManager(_rewardsManager);
         rewardsManager = _rewardsManager;
-        ipTokenStaking.setRewardsAddress{ value: fee }(_rewardsManager);
 
         this.depositIP{ value: minStake }(msg.sender);
 
         // Temp operator permission for first stake
         address _operator = operator;
         operator = address(this);
-        this.stake(_validatorUncmpPubkey, minStake, _period, "");
+        this.stake(_validatorCmpPubkey, minStake, _period, "");
         operator = _operator;
+
+        // First stake and then set addresses bcs Story requires to have some staking to set addresses
+        withdrawal = _withdrawal;
+        ipTokenStaking.setWithdrawalAddress{ value: fee }(_withdrawal);
+
+        rewardsManager = _rewardsManager;
+        ipTokenStaking.setRewardsAddress{ value: fee }(_rewardsManager);
 
         transferOwnership(_owner);
         setupExecuted = true;
@@ -245,16 +246,16 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
 
     /// @notice Delete validators in bulk
     /// @dev The validators must have zero target percent. Call updateValidatorsTarget() before
-    function bulkRemoveValidators(bytes[] memory _validatorsUncmpPubkey) external onlyOwner {
-        for (uint256 i = 0; i < _validatorsUncmpPubkey.length; ++i) {
-            _removeValidator(_validatorsUncmpPubkey[i]);
+    function bulkRemoveValidators(bytes[] memory _validatorsCmpPubkey) external onlyOwner {
+        for (uint256 i = 0; i < _validatorsCmpPubkey.length; ++i) {
+            _removeValidator(_validatorsCmpPubkey[i]);
         }
     }
 
     /// @notice Insert validators in bul with zero target percent
-    function bulkInsertValidators(bytes[] memory _validatorsUncmpPubkey) external onlyOwner {
-        for (uint256 i = 0; i < _validatorsUncmpPubkey.length; ++i) {
-            _insertValidator(_validatorsUncmpPubkey[i]);
+    function bulkInsertValidators(bytes[] memory _validatorsCmpPubkey) external onlyOwner {
+        for (uint256 i = 0; i < _validatorsCmpPubkey.length; ++i) {
+            _insertValidator(_validatorsCmpPubkey[i]);
         }
     }
 
@@ -265,16 +266,16 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
 
     /// @notice Replace one validator maintaining the target percent
     function replaceOneValidator(
-        bytes memory _oldValidatorUncmpPubkey,
-        bytes memory _newValidatorUncmpPubkey
-    ) external onlyOwner checkDuplicatedValidator(_newValidatorUncmpPubkey) {
-        uint256 _index = getValidatorIndex(_oldValidatorUncmpPubkey);
-        _validators[_index].uncmpPubkey = _newValidatorUncmpPubkey;
+        bytes memory _oldValidatorCmpPubkey,
+        bytes memory _newValidatorCmpPubkey
+    ) external onlyOwner checkDuplicatedValidator(_newValidatorCmpPubkey) {
+        uint256 _index = getValidatorIndex(_oldValidatorCmpPubkey);
+        _validators[_index].cmpPubkey = _newValidatorCmpPubkey;
 
-        _validatorExists[keccak256(_oldValidatorUncmpPubkey)] = false;
-        _validatorExists[keccak256(_newValidatorUncmpPubkey)] = true;
+        _validatorExists[keccak256(_oldValidatorCmpPubkey)] = false;
+        _validatorExists[keccak256(_newValidatorCmpPubkey)] = true;
 
-        emit ReplaceValidator(_oldValidatorUncmpPubkey, _newValidatorUncmpPubkey);
+        emit ReplaceValidator(_oldValidatorCmpPubkey, _newValidatorCmpPubkey);
     }
 
     /// ************
@@ -288,33 +289,33 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     }
 
     /// @notice Operator function to stake IP into the validator
-    /// @param _validatorUncmpPubkey Validator uncompressed public key
+    /// @param _validatorCmpPubkey Validator uncompressed public key
     /// @param _amount Amount of IP to stake
     /// @param _period Enum staking period (flexible, short, medium, long)
     /// @param _extraData Additional data for the staking contract
     /// @return delegation_id The delegation id of the staked IP. Always 0 for flexible staking. Unique id for fixed staking
     function stake(
-        bytes calldata _validatorUncmpPubkey,
+        bytes calldata _validatorCmpPubkey,
         uint256 _amount,
         IIPTokenStaking.StakingPeriod _period,
         bytes calldata _extraData
-    ) external onlyFullyOperational onlyOperator checkValidatorExists(_validatorUncmpPubkey) returns (uint256 delegation_id) {
+    ) external onlyFullyOperational onlyOperator checkValidatorExists(_validatorCmpPubkey) returns (uint256 delegation_id) {
         delegation_id = ipTokenStaking.stake{ value: _amount }(
-            _validatorUncmpPubkey,
+            _validatorCmpPubkey,
             _period,
             _extraData
         );
 
-        emit Stake(msg.sender, _validatorUncmpPubkey, delegation_id, _amount, _extraData);
+        emit Stake(msg.sender, _validatorCmpPubkey, delegation_id, _amount, _extraData);
     }
 
     /// @notice Operator function to unstake IP from the validator
-    /// @param _validatorUncmpPubkey Validator uncompressed public key
+    /// @param _validatorCmpPubkey Validator uncompressed public key
     /// @param _amount Amount of IP to unstake
     /// @param _delegation_id The delegation id of the staked IP. Always 0 for flexible staking
     /// @param _extraData Additional data for the staking contract
     function unstake(
-        bytes calldata _validatorUncmpPubkey,
+        bytes calldata _validatorCmpPubkey,
         uint256 _amount,
         uint256 _delegation_id,
         bytes calldata _extraData
@@ -324,26 +325,26 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         onlyFullyOperational
         onlyOperator
         checkStakingOperationsFee
-        checkValidatorExists(_validatorUncmpPubkey)
+        checkValidatorExists(_validatorCmpPubkey)
     {
         ipTokenStaking.unstake{ value: msg.value }(
-            _validatorUncmpPubkey,
+            _validatorCmpPubkey,
             _delegation_id,
             _amount,
             _extraData
         );
 
-        emit Unstake(msg.sender, _validatorUncmpPubkey, _amount, _delegation_id, _extraData);
+        emit Unstake(msg.sender, _validatorCmpPubkey, _amount, _delegation_id, _extraData);
     }
 
     /// @notice Operator function to redelegate IP from one validator to another
-    /// @param _oldValidatorUncmpPubkey Old validator uncompressed public key
-    /// @param _newValidatorUncmpPubkey New validator uncompressed public key
+    /// @param _oldValidatorCmpPubkey Old validator uncompressed public key
+    /// @param _newValidatorCmpPubkey New validator uncompressed public key
     /// @param _amount Amount of IP to redelegate
     /// @param _delegation_id The delegation id of the staked IP. Always 0 for flexible staking
     function redelegate(
-        bytes calldata _oldValidatorUncmpPubkey,
-        bytes calldata _newValidatorUncmpPubkey,
+        bytes calldata _oldValidatorCmpPubkey,
+        bytes calldata _newValidatorCmpPubkey,
         uint256 _amount,
         uint256 _delegation_id
     )
@@ -352,11 +353,11 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         onlyFullyOperational
         onlyOperator
         checkStakingOperationsFee
-        checkValidatorExists(_newValidatorUncmpPubkey)
+        checkValidatorExists(_newValidatorCmpPubkey)
     {
         ipTokenStaking.redelegate{ value: msg.value }(
-            _oldValidatorUncmpPubkey,
-            _newValidatorUncmpPubkey,
+            _oldValidatorCmpPubkey,
+            _newValidatorCmpPubkey,
             _delegation_id,
             _amount
         );
@@ -380,8 +381,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         return _validators;
     }
 
-    function isValidatorListed(bytes memory _validatorUncmpPubkey) public view returns (bool) {
-        return _validatorExists[keccak256(_validatorUncmpPubkey)];
+    function isValidatorListed(bytes memory _validatorCmpPubkey) public view returns (bool) {
+        return _validatorExists[keccak256(_validatorCmpPubkey)];
     }
 
     /// @notice Redistribute the total amount of IP into the target percent
@@ -411,17 +412,17 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         return stakes;
     }
 
-    function getValidatorIndex(bytes memory _validatorUncmpPubkey) public view returns (uint256) {
+    function getValidatorIndex(bytes memory _validatorCmpPubkey) public view returns (uint256) {
         Validator[MAX_VALIDATORS] memory validators = _validators;
 
-        bytes32 _validatorPubkeyHash = keccak256(_validatorUncmpPubkey);
+        bytes32 _validatorPubkeyHash = keccak256(_validatorCmpPubkey);
         for (uint256 i = 0; i < validators.length; ++i) {
-            if (keccak256(validators[i].uncmpPubkey) == _validatorPubkeyHash) {
+            if (keccak256(validators[i].cmpPubkey) == _validatorPubkeyHash) {
                 return i;
             }
         }
 
-        revert ValidatorNotFount(_validatorUncmpPubkey);
+        revert ValidatorNotFount(_validatorCmpPubkey);
     }
 
     /// *************************
@@ -545,14 +546,14 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         emit UpdateValidatorTargets(msg.sender);
     }
 
-    function _removeValidator(bytes memory _validatorUncmpPubkey) private {
+    function _removeValidator(bytes memory _validatorCmpPubkey) private {
         uint256 _validatorsLength = validatorsLength;
 
         // The final validators array cannot be empty. Once initialized, it should be 
         // theoretically impossible for it to become empty.
         require(_validatorsLength > 1, ValidatorsEmptyList());
 
-        uint256 _index = getValidatorIndex(_validatorUncmpPubkey);
+        uint256 _index = getValidatorIndex(_validatorCmpPubkey);
         Validator memory validator = _validators[_index];
 
         require(validator.targetStakePercent == 0, ValidatorHasTargetPercent(validator));
@@ -565,25 +566,25 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
             delete _validators[_index];
         }
 
-        _validatorExists[keccak256(_validatorUncmpPubkey)] = false;
+        _validatorExists[keccak256(_validatorCmpPubkey)] = false;
         validatorsLength--;
 
-        emit RemoveValidator(_validatorUncmpPubkey);
+        emit RemoveValidator(_validatorCmpPubkey);
     }
 
     function _insertValidator(
-        bytes memory _validatorUncmpPubkey
-    ) private checkDuplicatedValidator(_validatorUncmpPubkey) {
+        bytes memory _validatorCmpPubkey
+    ) private checkDuplicatedValidator(_validatorCmpPubkey) {
         uint256 _validatorsLength = validatorsLength;
 
         /// notice how it needs to be at least one less than the MAX_VALIDATORS.
         require(_validatorsLength < MAX_VALIDATORS, MaxValidatorsExceeded());
 
         /// updating storage.
-        _validatorExists[keccak256(_validatorUncmpPubkey)] = true;
-        _validators[_validatorsLength].uncmpPubkey = _validatorUncmpPubkey;
+        _validatorExists[keccak256(_validatorCmpPubkey)] = true;
+        _validators[_validatorsLength].cmpPubkey = _validatorCmpPubkey;
         validatorsLength++;
 
-        emit InsertValidator(_validatorUncmpPubkey);
+        emit InsertValidator(_validatorCmpPubkey);
     }
 }

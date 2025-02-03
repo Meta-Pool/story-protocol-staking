@@ -3,6 +3,7 @@ pragma solidity ^0.8.23;
 
 /// @title IIPTokenStaking
 /// @notice Interface for the IPTokenStaking contract
+/// @dev Interface from https://github.com/piplabs/story/blob/main/contracts/src/interfaces/IIPTokenStaking.sol
 interface IIPTokenStaking {
     /// @notice Enum representing the different staking periods
     /// @dev FLEXIBLE is used for flexible staking, where the staking period is not fixed and can be changed by the user
