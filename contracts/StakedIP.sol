@@ -199,8 +199,9 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     }
 
     receive() external payable {
-        require(msg.sender != asset() && msg.sender != withdrawal, InvalidDepositSender(msg.sender));
-        depositIP(msg.sender);
+        if (msg.sender != asset() && msg.sender != withdrawal) {
+            depositIP(msg.sender);
+        }
     }
 
     /// *********
