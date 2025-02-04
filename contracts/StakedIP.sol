@@ -561,6 +561,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         if (_index != _validatorsLength - 1) {
             // Replace the element at the index with the last element in the array
             _validators[_index] = _validators[_validatorsLength - 1];
+            delete _validators[_validatorsLength - 1];
         } else {
             // If the element is the last one, just remove it
             delete _validators[_index];
