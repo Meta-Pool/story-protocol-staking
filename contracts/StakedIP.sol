@@ -198,6 +198,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         setupExecuted = true;
     }
 
+    /// @dev Deposit in case a user sends tokens directly to the contract
+    /// Exclude in case of asset for unwrapped process and withdrawal for sendIPToRestake
     receive() external payable {
         if (msg.sender != asset() && msg.sender != withdrawal) {
             depositIP(msg.sender);
