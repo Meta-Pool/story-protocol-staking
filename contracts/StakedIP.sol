@@ -474,13 +474,13 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         return assets;
     }
 
-    function mint(uint256 _assets, address _receiver) public override returns (uint256) {
-        _transferAndUnwrap(msg.sender, _assets);
+    function mint(uint256 _shares, address _receiver) public override returns (uint256) {
+        uint256 assets = previewMint(_shares);
 
-        uint256 shares = previewMint(_assets);
-        _deposit(msg.sender, _receiver, _assets, shares);
+        _transferAndUnwrap(msg.sender, assets);
+        _deposit(msg.sender, _receiver, assets, _shares);
 
-        return shares;
+        return assets;
     }
 
     /// ************
