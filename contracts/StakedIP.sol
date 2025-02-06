@@ -419,7 +419,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
         Validator[MAX_VALIDATORS] memory validators = _validators;
 
         bytes32 _validatorPubkeyHash = keccak256(_validatorCmpPubkey);
-        for (uint256 i = 0; i < validators.length; ++i) {
+        for (uint256 i = 0; i < validatorsLength; ++i) {
             if (keccak256(validators[i].cmpPubkey) == _validatorPubkeyHash) {
                 return i;
             }
