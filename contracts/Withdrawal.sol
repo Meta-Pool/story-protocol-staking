@@ -109,7 +109,8 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
 
     /// @notice Process pending withdrawal if there's enough IP
     /// @param _request_id Position of the withdrawal in the _userPendingWithdrawals array
-    function completeWithdraw(uint256 _request_id) external {
+    /// @param _wrap If true, the IP will be wrapped before sending it to the receiver
+    function completeWithdraw(uint256 _request_id, bool _wrap) external {
         WithdrawRequest memory _pendingUserWithdraw = _userPendingWithdrawals[msg.sender][_request_id];
 
         if (_pendingUserWithdraw.amount == 0) {
@@ -123,7 +124,13 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
         delete _userPendingWithdrawals[msg.sender][_request_id];
         totalPendingWithdrawals -= _pendingUserWithdraw.amount;
 
-        payable(_pendingUserWithdraw.receiver).sendValue(_pendingUserWithdraw.amount);
+        if (_wrap) {
+            address wIP = StakedIP(stIP).asset();
+            IWIP(wIP).deposit{ value: _pendingUserWithdraw.amount }();
+            IERC20(wIP).safeTransfer(_pendingUserWithdraw.receiver, _pendingUserWithdraw.amount);
+        } else {
+            payable(_pendingUserWithdraw.receiver).sendValue(_pendingUserWithdraw.amount);
+        }
 
         emit CompleteWithdraw(
             msg.sender,
