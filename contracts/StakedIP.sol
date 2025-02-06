@@ -463,7 +463,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     /// @param _shares are minted, but user have to pay in Q tokens.
     function mintIP(uint256 _shares, address _receiver) external payable returns (uint256) {
         uint256 assets = previewMint(_shares);
-        _deposit(address(this), _receiver, assets, _shares);
+        
+        _deposit(msg.sender, _receiver, assets, _shares);
 
         // Return change to the caller.
         uint256 change = msg.value - assets;
