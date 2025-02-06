@@ -446,7 +446,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, ISta
     function depositIP(address _receiver) public payable returns (uint256) {
         uint256 shares = previewDeposit(msg.value);
 
-        _deposit(address(this), _receiver, msg.value, shares);
+        _deposit(msg.sender, _receiver, msg.value, shares);
 
         return shares;
     }
