@@ -2,7 +2,6 @@
 pragma solidity 0.8.28;
 
 import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
-import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol';
 import '@openzeppelin/contracts/utils/Address.sol';
 import '@openzeppelin/contracts/interfaces/IERC20.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
@@ -43,7 +42,6 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
     error InvalidDisassembleTime(uint256 valueSent);
     error InvalidRequest();
     error InvalidRequestId(address _user, uint256 _request_id);
-    error WithdrawAlreadyCompleted(address _user, uint256 _request_id);
     error UserMaxWithdrawalsReached(address _user);
     error CallerIsNotOperator();
 
