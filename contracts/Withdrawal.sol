@@ -26,7 +26,7 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
     uint32 public constant MAX_VALIDATORS_DISASSEMBLE_TIME = 90 days;
 
     address payable public stIP;
-
+    address public operator;
     // How much requested withdrawals are pending to complete
     uint256 public totalPendingWithdrawals;
     uint32 public validatorsDisassembleTime;
@@ -35,6 +35,7 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
 
     event RequestWithdraw(address indexed user, uint256 id, uint256 amount, address receiver, uint256 unlockTimestamp);
     event CompleteWithdraw(address indexed user, uint256 id, uint256 amount, address receiver, uint256 unlockTimestamp);
+    event UpdateOperator(address _caller, address _newOperator);
 
     error StakingUnauthorized(address _caller);
     error NotEnoughIPtoStake(uint256 _requested, uint256 _available);
@@ -44,22 +45,35 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
     error InvalidRequestId(address _user, uint256 _request_id);
     error WithdrawAlreadyCompleted(address _user, uint256 _request_id);
     error UserMaxWithdrawalsReached(address _user);
+    error CallerIsNotOperator();
 
     modifier onlyStaking() {
         require(msg.sender == stIP, StakingUnauthorized(msg.sender));
         _;
     }
 
+    modifier onlyOperator() {
+        require(msg.sender == operator, CallerIsNotOperator());
+        _;
+    }
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() { _disableInitializers(); }
 
-    function initialize(address _owner, address payable _stIP) external initializer {
+    function initialize(address _owner, address _operator, address payable _stIP) external initializer {
         __Ownable_init(_owner);
         stIP = _stIP;
         _setValidatorsDisassembleTime(14 days);
+        updateOperator(_operator);
     }
 
     receive() external payable {}
+
+    function updateOperator(address _newOperator) public onlyOwner {
+        operator = _newOperator;
+
+        emit UpdateOperator(msg.sender, _newOperator);
+    }
 
     function getUserPendingWithdrawals(
         address _account
@@ -124,7 +138,7 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
     /// @dev As the validators with less than 1024 IP will be fully disassembled,
     /// the contract can have more IP than the needed for withdrawals.
     /// So the Staking can take this IP and send it again to validators. This shouldn't mint new stIP
-    function sendIPToRestake(uint256 _amount) external onlyStaking {
+    function sendIPToRestake(uint256 _amount) external onlyOperator {
         if (address(this).balance <= totalPendingWithdrawals) revert NotEnoughIPtoStake(_amount, 0);
 
         uint256 ipRemaining = address(this).balance - totalPendingWithdrawals;
