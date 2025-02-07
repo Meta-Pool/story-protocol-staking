@@ -5,7 +5,7 @@ import './interfaces/IRewardsManager.sol';
 import './interfaces/IStakedIP.sol';
 import './interfaces/IWIP.sol';
 import './interfaces/IWithdrawal.sol';
-import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
+import '@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol';
 import '@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol';
 import '@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol';
 import '@openzeppelin/contracts/interfaces/IERC20.sol';
@@ -22,7 +22,7 @@ struct Validator {
 /// @title Meta Pool stIP 🌒 vault contract.
 /// @author Meta Pool devs team
 /// @notice [FullyOperational] When NOT fully operational, users cannot: 1) mint, 2) deposit, 3) withdraw nor 4) redeem.
-contract StakedIP is Initializable, ERC4626Upgradeable, OwnableUpgradeable, IStakedIP {
+contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable, IStakedIP {
     using Address for address payable;
     using SafeERC20 for IERC20;
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import '@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol';
+import '@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol';
 import '@openzeppelin/contracts/utils/Address.sol';
 import '@openzeppelin/contracts/interfaces/IERC20.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
@@ -17,7 +17,7 @@ struct WithdrawRequest {
 /// @title Manage withdrawals from validators to users
 /// @notice Receive request for withdrawals from StakedIP and allow users to complete the withdrawals once the unlock timestamp is reached
 /// @dev As the disassemble of validators is delayed, this contract manage the pending withdraw from users to allow the to complete it once his unlockTimestamp is reached and if the contract has enough IP
-contract Withdrawal is OwnableUpgradeable, IWithdrawal {
+contract Withdrawal is Ownable2StepUpgradeable, IWithdrawal {
     using Address for address payable;
     using SafeERC20 for IERC20;
 
@@ -62,15 +62,13 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
         __Ownable_init(_owner);
         stIP = _stIP;
         _setValidatorsDisassembleTime(14 days);
-        updateOperator(_operator);
+        _updateOperator(_operator);
     }
 
     receive() external payable {}
 
-    function updateOperator(address _newOperator) public onlyOwner {
-        operator = _newOperator;
-
-        emit UpdateOperator(msg.sender, _newOperator);
+    function updateOperator(address _newOperator) external onlyOwner {
+        _updateOperator(_newOperator);
     }
 
     function getUserPendingWithdrawals(
@@ -151,6 +149,11 @@ contract Withdrawal is OwnableUpgradeable, IWithdrawal {
         if (_amount > ipRemaining) revert NotEnoughIPtoStake(_amount, ipRemaining);
 
         stIP.sendValue(_amount);
+    }
+
+    function _updateOperator(address _newOperator) private {
+        operator = _newOperator;
+        emit UpdateOperator(msg.sender, _newOperator);
     }
 
     function _setValidatorsDisassembleTime(uint32 _disassembleTime) private {

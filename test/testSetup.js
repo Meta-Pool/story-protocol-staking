@@ -170,6 +170,8 @@ async function deployStoryPoolFixture() {
     [
       // address _owner,
       owner.address,
+      // address _operator,
+      operator.address,
       // address payable _stIP,
       StakedIPContract.target,
     ],
@@ -194,6 +196,7 @@ async function deployStoryPoolFixture() {
     { value: FEE + FEE + (await IPTokenStakingContract.minStakeAmount()) }
   );
 
+  await StakedIPContract.connect(owner).acceptOwnership();
 
   // todo: will the initial deposit be at initialization?
   // await StakedIPContract.updateRewardsManager(RewardsManagerContract.target, { value: FEE });
