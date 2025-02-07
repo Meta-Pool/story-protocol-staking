@@ -31,6 +31,7 @@ contract RewardsManager is IRewardsManager, Ownable, ReentrancyGuard {
 
     error InvalidAddressZero();
     error InvalidRewardsFee();
+    error NoRewards();
 
     modifier checkRewards(uint256 _rewardsFeeBp) {
         require(_rewardsFeeBp <= MAX_REWARDS_FEE, InvalidRewardsFee());
@@ -74,8 +75,10 @@ contract RewardsManager is IRewardsManager, Ownable, ReentrancyGuard {
     /// @dev Technically safe to be called by anyone
     function sendRewardsAndFees() external nonReentrant {
         (uint256 rewards, uint256 treasuryFee) = getManagerAccrued();
+        require(rewards > 0, NoRewards());
 
-        if (rewards > 0) IStakedIP(stakedIP).injectRewards{ value: rewards }();
+        IStakedIP(stakedIP).injectRewards{ value: rewards }();
+
         if (treasuryFee > 0) payable(treasury).sendValue(treasuryFee);
 
         emit SendRewardsAndFees(msg.sender, rewards, treasuryFee);
