@@ -158,11 +158,14 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
         const {
           StakedIPContract,
           alice,
+          owner
         } = await loadFixture(fixture);
 
         await expect(
           StakedIPContract.connect(alice).depositIP(alice.address, {value: 0})
         ).to.be.revertedWithCustomError(StakedIPContract, "InvalidZeroAmount");
+
+        await StakedIPContract.connect(owner).setRewarderWhitelisted(alice.address, true);
 
         await expect(
           StakedIPContract.connect(alice).injectRewards({value: 0})

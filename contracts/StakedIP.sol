@@ -60,6 +60,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     Validator[MAX_VALIDATORS] private _validators;
     mapping(bytes32 => bool) private _validatorExists;
 
+    mapping(address => bool) private _rewarderWhitlisted;
+
     /// *******************
     /// * Events & errors *
     /// *******************
@@ -86,6 +88,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     error LessThanMinDeposit();
     error MaxValidatorsExceeded();
     error NotFullyOperational();
+    error RewarderUnauthorized();
     error OperatorUnauthorized();
     error SetupAlreadyExecuted();
     error SetupInvalidIPValue();
@@ -103,6 +106,17 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
 
     modifier onlyOperator() {
         require(msg.sender == operator, OperatorUnauthorized());
+        _;
+    }
+
+    modifier onlyAuthorizedRewarder() {
+        require(
+            isRewarderWhitelisted(msg.sender) ||
+                msg.sender == rewardsManager ||
+                msg.sender == owner() ||
+                msg.sender == operator,
+            RewarderUnauthorized()
+        );
         _;
     }
 
@@ -247,6 +261,10 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
         emit UpdateOperator(msg.sender, _newOperator);
     }
 
+    function setRewarderWhitelisted(address _rewarder, bool _whitelisted) external onlyOwner {
+        _rewarderWhitlisted[_rewarder] = _whitelisted;
+    }
+
     /// @notice Delete validators in bulk
     /// @dev The validators must have zero target percent. Call updateValidatorsTarget() before
     function bulkRemoveValidators(bytes[] memory _validatorsCmpPubkey) external onlyOwner {
@@ -388,6 +406,10 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
         return _validatorExists[keccak256(_validatorCmpPubkey)];
     }
 
+    function isRewarderWhitelisted(address _rewarder) public view returns (bool) {
+        return _rewarderWhitlisted[_rewarder];
+    }
+
     /// @notice Redistribute the total amount of IP into the target percent
     function redistribute(uint256 _totalAmount) external view returns (uint256[] memory) {
         Validator[MAX_VALIDATORS] memory validators = _validators;
@@ -432,8 +454,9 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     /// * Processing Rewards 💎 *
     /// *************************
 
-    /// todo: not everybody should be able to inject rewards
-    function injectRewards() external payable {
+    /// @notice Deposit IP rewards into the vault
+    /// @dev Restricted to authorized rewarders
+    function injectRewards() external payable onlyFullyOperational onlyAuthorizedRewarder {
         require(msg.value >= minDepositAmount, LessThanMinDeposit());
         totalUnderlying += msg.value;
     }
