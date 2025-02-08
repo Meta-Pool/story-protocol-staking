@@ -38,6 +38,8 @@ contract RewardsManager is IRewardsManager, Ownable2Step, ReentrancyGuard {
         _;
     }
 
+    receive() external payable {}
+
     constructor(
         address _owner,
         address _stakedIP,
