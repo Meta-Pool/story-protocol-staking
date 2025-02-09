@@ -11,4 +11,5 @@ module.exports = {
   RPC_URL: process.env.RPC_URL,
   BLOCK_NUMBER: Number(process.env.BLOCK_NUMBER),
   MNEMONIC: process.env.MNEMONIC,
+  FORK_CHAIN: process.env.FORK_CHAIN === 'true',
 }

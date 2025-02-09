@@ -2,12 +2,21 @@ const {
   RPC_URL,
   BLOCK_NUMBER,
   MNEMONIC,
-  FORKING_CHAIN_ID
+  FORKING_CHAIN_ID,
+  FORK_CHAIN
 } = require('./scripts/env')
 
 require('@nomicfoundation/hardhat-toolbox')
 require('@openzeppelin/hardhat-upgrades')
 require("hardhat-contract-sizer");
+
+const forking = {
+  url: RPC_URL,
+  enabled: FORK_CHAIN,
+}
+
+if (BLOCK_NUMBER) 
+  forking.blockNumber = BLOCK_NUMBER
 
 module.exports = {
   defaultNetwork: 'hardhat',
@@ -16,16 +25,12 @@ module.exports = {
       url: "http://127.0.0.1:8545"
     },
     hardhat: {
-      // chainId: FORKING_CHAIN_ID,
-      // accounts: { mnemonic: MNEMONIC },
-      // forking: {
-      //   url: RPC_URL,
-      //   blockNumber: BLOCK_NUMBER,
-      //   enabled: true,
-      // },
+      chainId: FORKING_CHAIN_ID,
+      accounts: { mnemonic: MNEMONIC },
+      forking,
     },
     testnet: {
-      url: "https://rpc.odyssey.storyrpc.io/",
+      url: RPC_URL || "https://rpc.odyssey.storyrpc.io/",
       accounts: { mnemonic: MNEMONIC },
     },
     mainnet: {
