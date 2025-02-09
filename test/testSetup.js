@@ -1,4 +1,7 @@
 const { ethers, upgrades } = require("hardhat");
+const { WRAPPED_NATIVE } = require("../constants");
+const { contract } = require("./utils");
+const { FORK_CHAIN } = require("../scripts/env");
 
 const ONE_DAY_SECONDS = BigInt(24 * 60 * 60);
 const MLARGE = ethers.parseEther("100000000");
@@ -92,8 +95,13 @@ async function deployStoryPoolFixture() {
     carl
   ] = await ethers.getSigners();
 
-  const WIPContract = await WIP.deploy();
-  await WIPContract.waitForDeployment();
+  let WIPContract
+  if (FORK_CHAIN) {
+    WIPContract = await contract(WRAPPED_NATIVE, "IWIP")
+  } else {
+    WIPContract = await WIP.deploy();
+    await WIPContract.waitForDeployment();
+  }
 
   // struct InitializerArgs {
   //     address owner;
@@ -111,7 +119,7 @@ async function deployStoryPoolFixture() {
   ]
   const IPTokenStakingContract = await upgrades.deployProxy(
     IPTokenStaking,
-    [ initializerArgs ],
+    [initializerArgs],
     {
       initializer: "initialize",
       unsafeAllow: ["constructor", "state-variable-immutable"],
@@ -124,7 +132,7 @@ async function deployStoryPoolFixture() {
 
   const StakedIPContract = await upgrades.deployProxy(
     StakedIP,
-    [ 
+    [
       // address _operator,
       operator.address,
       // IIPTokenStaking _ipTokenStaking,
@@ -144,7 +152,7 @@ async function deployStoryPoolFixture() {
         DUMMY_VALIDATOR_SET[2].publicKey
       ],
       // uint16[] calldata _validatorsStakePercent
-      [ 2000, 3000, 5000 ],
+      [2000, 3000, 5000],
     ],
     {
       initializer: "initialize",
