@@ -37,9 +37,16 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     uint16 private constant ONE_HUNDRED = 10_000;
     uint16 private constant MAX_VALIDATORS = 10;
 
+    /// @dev Minimum time between two slash reports
+    uint16 private constant SLASH_REPORT_TIMELOCK = 4 hours;
+
     /// *****************
     /// * Storage slots *
     /// *****************
+
+    /// @dev Max amount of underlying that can be reported as slashed per call
+    uint16 public maxSlashPercent;
+    uint256 public slashReportTimelock;
 
     uint256 public minDepositAmount;
     uint256 public totalUnderlying;
@@ -78,6 +85,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     event UpdateRewardsManager(address _caller, address _newRewardsManager);
     event UpdateValidatorTargets(address _sender);
     event UpdateWithdrawal(address _caller, address _newWithdrawal);
+    event ReportSlash(address _caller, uint256 _amount, bytes _validatorCmpPubkey);
+    event UpdateMaxSlashPercent(address _caller, uint16 _newMaxSlashPercent);
 
     error ArraySizeMismatch();
     error HasStaking();
@@ -98,6 +107,9 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     error ValidatorNotFount(bytes _validator);
     error ValidatorNotListed(bytes _validatorCmpPubkey);
     error ValidatorsEmptyList();
+    error MaxSlashAmountExceeded(uint256 _maxAmount, uint256 _reportedAmount);
+    error ReportSlashTimelock(uint256 _unlockTime);
+    error InvalidMaxSlashPercent(uint16 _maxSlashPercent);
 
     modifier onlyFullyOperational() {
         require(fullyOperational, NotFullyOperational());
@@ -132,6 +144,16 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
 
     modifier checkDuplicatedValidator(bytes memory _validatorCmpPubkey) {
         require(!isValidatorListed(_validatorCmpPubkey), ValidatorAlreadyListed(_validatorCmpPubkey));
+        _;
+    }
+
+    modifier checkValidSlash(uint256 _amount) {
+        uint256 unlockTime = slashReportTimelock;
+        require(block.timestamp >= unlockTime, ReportSlashTimelock(unlockTime));
+        slashReportTimelock = block.timestamp + SLASH_REPORT_TIMELOCK;
+
+        uint256 maxSlashAmount = (totalUnderlying * maxSlashPercent) / ONE_HUNDRED;
+        require(_amount <= maxSlashAmount, MaxSlashAmountExceeded(maxSlashAmount, _amount));
         _;
     }
 
@@ -209,6 +231,10 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
         ipTokenStaking.setRewardsAddress{ value: fee }(_rewardsManager);
 
         transferOwnership(_owner);
+
+        // Story slash 0.02% of the stake if validator offline 95% of the time
+        // https://docs.story.foundation/docs/tokenomics-staking#slashunjail
+        maxSlashPercent = 2;
         setupExecuted = true;
     }
 
@@ -259,6 +285,15 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
         operator = _newOperator;
 
         emit UpdateOperator(msg.sender, _newOperator);
+    }
+
+    function updateMaxSlashPercent(uint16 _newMaxSlashPercent) public onlyOwner {
+        // Worst case slash can be of 5% if validator double sign
+        // https://docs.story.foundation/docs/tokenomics-staking#slashunjail
+        require(_newMaxSlashPercent <= 500, InvalidMaxSlashPercent(_newMaxSlashPercent));
+        maxSlashPercent = _newMaxSlashPercent;
+
+        emit UpdateMaxSlashPercent(msg.sender, _newMaxSlashPercent);
     }
 
     function setRewarderWhitelisted(address _rewarder, bool _whitelisted) external onlyOwner {
@@ -459,6 +494,11 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     function injectRewards() external payable onlyFullyOperational onlyAuthorizedRewarder {
         require(msg.value >= minDepositAmount, LessThanMinDeposit());
         totalUnderlying += msg.value;
+    }
+
+    function reportSlash(uint256 _amount, bytes calldata _validatorCmpPubkey) external onlyOperator checkValidSlash(_amount) checkValidatorExists(_validatorCmpPubkey) {
+        totalUnderlying -= _amount;
+        emit ReportSlash(msg.sender, _amount, _validatorCmpPubkey);
     }
 
     /// *********************
