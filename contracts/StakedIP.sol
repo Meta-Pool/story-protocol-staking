@@ -582,7 +582,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
 
         IWithdrawal(withdrawal).requestWithdraw(_assets, _caller, _receiver);
 
-        emit Withdraw(msg.sender, _receiver, _owner, _shares, _assets);
+        emit Withdraw(_caller, _receiver, _owner, _shares, _assets);
     }
 
     /// ***********
