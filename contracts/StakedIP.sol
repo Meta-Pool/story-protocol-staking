@@ -57,7 +57,6 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     address public withdrawal;
 
     bool public fullyOperational;
-    bool private setupExecuted;
 
     /// @notice Target 🎯 values always sum ONE_HUNDRED, percentage on each validator.
     /// By definition, the following two arrays must be the same size ALL the time.
@@ -161,6 +160,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     constructor() { _disableInitializers(); }
 
     function initialize(
+        address _owner,
         address _operator,
         IIPTokenStaking _ipTokenStaking,
         IERC20 _asset,
@@ -186,56 +186,13 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
             _insertValidator(_validatorsPubkey[i]);
         }
         _updateValidatorsTarget(_validatorsStakePercent);
-    }
-
-    /// @notice Setup contracts and makes first stake
-    /// @dev To set withdrawal and reward addresses into Story is required to have at least one stake.
-    /// This function run only once. Separated from initialize as oz does not allow to call as payable.
-    /// https://github.com/OpenZeppelin/openzeppelin-upgrades/issues/953
-    function setupStaking(
-        address _owner,
-        address _withdrawal,
-        address _rewardsManager,
-        bytes calldata _validatorCmpPubkey,
-        IIPTokenStaking.StakingPeriod _period
-    ) external payable onlyOwner {
-        require(
-            _owner != address(0) && _withdrawal != address(0) && _rewardsManager != address(0),
-            InvalidZeroAddress()
-        );
-        require(!setupExecuted, SetupAlreadyExecuted());
-        require(totalUnderlying == 0, HasStaking());
-        require(isValidatorListed(_validatorCmpPubkey), ValidatorNotListed(_validatorCmpPubkey));
-
-        uint256 fee = ipTokenStaking.fee();
-        uint256 minStake = ipTokenStaking.minStakeAmount();
-        require(msg.value == (2 * fee) + minStake, SetupInvalidIPValue());
-
-        fullyOperational = true;
-
-        rewardsManager = _rewardsManager;
-
-        this.depositIP{ value: minStake }(msg.sender);
-
-        // Temp operator permission for first stake
-        address _operator = operator;
-        operator = address(this);
-        this.stake(_validatorCmpPubkey, minStake, _period, "");
-        operator = _operator;
-
-        // First stake and then set addresses bcs Story requires to have some staking to set addresses
-        withdrawal = _withdrawal;
-        ipTokenStaking.setWithdrawalAddress{ value: fee }(_withdrawal);
-
-        rewardsManager = _rewardsManager;
-        ipTokenStaking.setRewardsAddress{ value: fee }(_rewardsManager);
-
-        transferOwnership(_owner);
 
         // Story slash 0.02% of the stake if validator offline 95% of the time
         // https://docs.story.foundation/docs/tokenomics-staking#slashunjail
         maxSlashPercent = 2;
-        setupExecuted = true;
+        fullyOperational = true;
+
+        __Ownable_init(_owner);
     }
 
     /// @dev Deposit in case a user sends tokens directly to the contract
@@ -429,7 +386,10 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
 
     /// @dev Assets increases as rewards are received by rewardsManager and later re-staked burning his shares
     function totalAssets() public view override returns (uint256) {
-        (uint256 rewards, ) = IRewardsManager(rewardsManager).getManagerAccrued();
+        uint256 rewards = 0;
+        if (rewardsManager != address(0)) {
+            (rewards, ) = IRewardsManager(rewardsManager).getManagerAccrued();
+        }
         return totalUnderlying + rewards;
     }
 
@@ -452,7 +412,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
 
         /// @dev In case of rounding errors, do not add the leftovers to a 0 percent validator
         uint256 _indexOfNotZeroPercentValidator;
-        uint256 totalDistributed = 0; // Should equal _totalQ.
+        uint256 totalDistributed = 0; // Should equal _totalIP.
         for (uint256 i = 0; i < validatorsLength; ++i) {
             if (validators[i].targetStakePercent == 0) continue;
             _indexOfNotZeroPercentValidator = i;
@@ -523,7 +483,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
         return shares;
     }
 
-    /// @param _shares are minted, but user have to pay in Q tokens.
+    /// @param _shares are minted, but user have to pay in IP tokens.
     function mintIP(uint256 _shares, address _receiver) external payable returns (uint256) {
         uint256 assets = previewMint(_shares);
 
