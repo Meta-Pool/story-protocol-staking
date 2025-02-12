@@ -1,13 +1,20 @@
 const { expect } = require("chai");
 const { ethers, upgrades, network } = require("hardhat");
-const { loadFixture, time } = require("@nomicfoundation/hardhat-network-helpers");
+const { loadFixture, time, setBalance } = require("@nomicfoundation/hardhat-network-helpers");
 const {
   deployStoryPoolFixture,
   ONE_DAY_SECONDS,
   DUMMY_VALIDATOR_SET,
   GWEI,
-} = require("./testSetup");
+} = require("./fixtures/deployContracts");
 const { getPercentage } = require("./utils");
+
+const txGasCost = async (tx) => {
+  const receipt = await tx.wait();
+  const gasUsed = receipt.gasUsed;
+  const gasPrice = tx.gasPrice;
+  return gasUsed * gasPrice;
+}
 
 describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
   const fixtures = [deployStoryPoolFixture];
@@ -34,12 +41,12 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
         expect(await StakedIPContract.fullyOperational()).to.be.equal(true);
 
         expect(await StakedIPContract.minDepositAmount()).to.be.equal(ethers.parseEther("1"));
-        expect(await StakedIPContract.totalUnderlying()).to.be.equal(await IPTokenStakingContract.minStakeAmount());
+        expect(await StakedIPContract.totalUnderlying()).to.be.equal(ethers.parseUnits("5", 18));
         expect(await StakedIPContract.ipTokenStaking()).to.be.equal(IPTokenStakingContract.target);
         expect(await StakedIPContract.operator()).to.be.equal(operator.address);
 
         expect(await StakedIPContract.asset()).to.be.equal(WIPContract.target);
-        expect(await StakedIPContract.totalSupply()).to.be.equal(await IPTokenStakingContract.minStakeAmount());
+        expect(await StakedIPContract.totalSupply()).to.be.equal(ethers.parseUnits("5", 18));
 
         // todo: will the initial deposit be at initialization?
         // expect(await StakedIPContract.rewardsManager()).to.be.equal(RewardsManagerContract.target);
@@ -162,10 +169,6 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
           owner
         } = await loadFixture(fixture);
 
-        await expect(
-          StakedIPContract.connect(alice).depositIP(alice.address, { value: 0 })
-        ).to.be.revertedWithCustomError(StakedIPContract, "InvalidZeroAmount");
-
         await StakedIPContract.connect(owner).setRewarderWhitelisted(alice.address, true);
 
         await expect(
@@ -210,10 +213,6 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
 
         await expect(
           StakedIPContract.connect(owner).injectRewards({ value: (await StakedIPContract.minDepositAmount()) - 1n })
-        ).to.be.revertedWithCustomError(StakedIPContract, "LessThanMinDeposit");
-
-        await expect(
-          StakedIPContract.connect(alice).depositIP(alice.address, { value: (await StakedIPContract.minDepositAmount()) - 1n })
         ).to.be.revertedWithCustomError(StakedIPContract, "LessThanMinDeposit");
       });
 
@@ -315,71 +314,6 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
             { value: FEE + 1n }
           )
         ).to.be.revertedWithCustomError(StakedIPContract, "InvalidIPFee");
-      });
-
-      it(`[T111]-${index + 1} StakedIPContract - NotFullyOperational().`, async function () {
-        const {
-          StakedIPContract,
-          WithdrawalContract,
-          RewardsManagerContract,
-          FEE,
-          owner,
-          operator,
-          alice,
-        } = await loadFixture(fixture);
-
-        await StakedIPContract.connect(alice).depositIP(alice.address, { value: ethers.parseEther("1") });
-
-        await StakedIPContract.connect(owner).toggleContractOperation();
-
-        await expect(
-          StakedIPContract.connect(alice).depositIP(alice.address, { value: ethers.parseEther("1") })
-        ).to.be.revertedWithCustomError(StakedIPContract, "NotFullyOperational");
-
-        await expect(
-          StakedIPContract.connect(alice).withdraw(ethers.parseEther("1"), alice.address, alice.address)
-        ).to.be.revertedWithCustomError(StakedIPContract, "NotFullyOperational");
-
-        await expect(
-          StakedIPContract.connect(operator).stake(
-            // bytes calldata _validatorUncmpPubkey,
-            DUMMY_VALIDATOR_SET[0].publicKey,
-            // uint _amount,
-            ethers.parseEther("1"),
-            // IIPTokenStaking.StakingPeriod _period,
-            1,
-            // bytes calldata _extraData
-            "0x",
-          )
-        ).to.be.revertedWithCustomError(StakedIPContract, "NotFullyOperational");
-
-        await expect(
-          StakedIPContract.connect(operator).unstake(
-            //     bytes calldata _validatorUncmpPubkey,
-            DUMMY_VALIDATOR_SET[0].publicKey,
-            //     uint _amount,
-            ethers.parseEther("1"),
-            //     uint _delegation_id,
-            1,
-            //     bytes calldata _extraData
-            "0x",
-            { value: FEE }
-          )
-        ).to.be.revertedWithCustomError(StakedIPContract, "NotFullyOperational");
-
-        await expect(
-          StakedIPContract.connect(operator).redelegate(
-            // bytes calldata _oldValidatorUncmpPubkey,
-            DUMMY_VALIDATOR_SET[0].publicKey,
-            // bytes calldata _newValidatorUncmpPubkey,
-            DUMMY_VALIDATOR_SET[1].publicKey,
-            // uint _amount,
-            ethers.parseEther("1"),
-            // uint _delegation_id
-            1,
-            { value: FEE }
-          )
-        ).to.be.revertedWithCustomError(StakedIPContract, "NotFullyOperational");
       });
 
       // withdrawal
@@ -632,21 +566,6 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
         expect(await StakedIPContract.operator()).to.be.equal(bob.address);
       });
 
-      it("[T125] toggleContractOperation() - Disable contract fully operational", async function () {
-        const {
-          StakedIPContract,
-          owner,
-          FEE,
-          bob
-        } = await loadFixture(fixture);
-
-        expect(await StakedIPContract.fullyOperational()).to.be.equal(true);
-
-        await StakedIPContract.connect(owner).toggleContractOperation();
-
-        expect(await StakedIPContract.fullyOperational()).to.be.equal(false);
-      });
-
       it("[T126] setRewarderWhitelisted() - Set new whitelisted rewarder", async function () {
         const {
           StakedIPContract,
@@ -680,47 +599,62 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
       });
     });
 
-    describe("Deposit", function () {
-      it("[T127] depositIP() - Deposit IP tokens with price 1:1", async function () {
+    describe("Redeem", function () {
+      it("[T132] redeem() - Redeem IP tokens with price 1:1", async function () {
         const {
           StakedIPContract,
           alice
         } = await loadFixture(fixture);
 
-        const totalSupply = await StakedIPContract.totalSupply(),
-          totalUnderlying = await StakedIPContract.totalUnderlying(),
-          depositAmount = ethers.parseEther("5");
+        const depositAmount = ethers.parseEther("5");
 
         await StakedIPContract.connect(alice).depositIP(alice.address, { value: depositAmount });
 
-        expect(await StakedIPContract.totalSupply()).to.be.equal(totalSupply + depositAmount);
-        expect(await StakedIPContract.totalUnderlying()).to.be.equal(totalUnderlying + depositAmount);
-        expect(await StakedIPContract.balanceOf(alice.address)).to.be.equal(depositAmount);
+        const totalSupply = await StakedIPContract.totalSupply(),
+          totalUnderlying = await StakedIPContract.totalUnderlying()
+
+        const redeemAmount = ethers.parseEther("2");
+
+        await StakedIPContract.connect(alice).redeem(redeemAmount, alice.address, alice.address);
+
+        expect(await StakedIPContract.totalSupply()).to.be.equal(totalSupply - redeemAmount);
+        expect(await StakedIPContract.totalUnderlying()).to.be.equal(totalUnderlying - redeemAmount);
+        expect(await StakedIPContract.balanceOf(alice.address)).to.be.equal(depositAmount - redeemAmount);
       });
 
-      it("[T128] depositIP() - Deposit IP tokens with price 1:2", async function () {
+      it("[T133] redeem() - Redeem IP tokens with price 1:2", async function () {
         const {
           StakedIPContract,
           operator,
           alice
         } = await loadFixture(fixture);
 
-        const totalSupply = await StakedIPContract.totalSupply(),
-          totalUnderlyingBefore = await StakedIPContract.totalUnderlying(),
-          depositAmount = ethers.parseEther("5");
+        const totalUnderlyingBefore = await StakedIPContract.totalUnderlying(),
+          depositAmount = ethers.parseEther("4");
 
         await StakedIPContract.connect(operator).injectRewards({ value: totalUnderlyingBefore });
 
-        const totalUnderlying = await StakedIPContract.totalUnderlying()
+
+        const expectedSharesIn = await StakedIPContract.previewDeposit(depositAmount);
 
         await StakedIPContract.connect(alice).depositIP(alice.address, { value: depositAmount });
 
-        expect(await StakedIPContract.totalSupply()).to.be.equal(totalSupply + (depositAmount / 2n));
-        expect(await StakedIPContract.totalUnderlying()).to.be.equal(totalUnderlying + depositAmount);
-        expect(await StakedIPContract.balanceOf(alice.address)).to.be.equal(depositAmount / 2n);
+        const totalUnderlying = await StakedIPContract.totalUnderlying()
+        const totalSupply = await StakedIPContract.totalSupply()
+        const balance = await StakedIPContract.balanceOf(alice.address)
+        const redeemAmount = balance / 2n;
+
+        const expectedAssetsOut = await StakedIPContract.previewRedeem(redeemAmount);
+        await StakedIPContract.connect(alice).redeem(redeemAmount, alice.address, alice.address);
+
+        expect(await StakedIPContract.totalSupply()).to.be.equal(totalSupply - redeemAmount);
+
+        expect(await StakedIPContract.totalUnderlying()).to.be.equal(totalUnderlying - expectedAssetsOut);
+
+        expect(await StakedIPContract.balanceOf(alice.address)).to.be.equal(expectedSharesIn - redeemAmount);
       });
 
-      it("[T128] depositIP() - Deposit IP tokens with price 1:0.95", async function () {
+      it("[T133] redeem() - Redeem IP tokens with price 1:0.95", async function () {
         const {
           StakedIPContract,
           owner,
@@ -728,104 +662,136 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
           alice
         } = await loadFixture(fixture);
 
-        const totalSupply = await StakedIPContract.totalSupply(),
-          totalUnderlyingBefore = await StakedIPContract.totalUnderlying(),
-          depositAmount = ethers.parseEther("5");
+        const totalUnderlyingBefore = await StakedIPContract.totalUnderlying(),
+          depositAmount = ethers.parseEther("4");
 
         await StakedIPContract.connect(owner).updateMaxSlashPercent(500);
         await StakedIPContract.connect(operator).reportSlash(getPercentage(totalUnderlyingBefore, 0.05), DUMMY_VALIDATOR_SET[0].publicKey);
 
-        const totalUnderlying = await StakedIPContract.totalUnderlying()
-
-        const stIPPrice = await StakedIPContract.getStIPPrice()
+        const expectedSharesIn = await StakedIPContract.previewDeposit(depositAmount);
 
         await StakedIPContract.connect(alice).depositIP(alice.address, { value: depositAmount });
 
-        const expectedIncrement = depositAmount * BigInt(1e18) / stIPPrice;
-
-        expect(await StakedIPContract.totalSupply()).to.be.equal(totalSupply + expectedIncrement);
-        expect(await StakedIPContract.totalUnderlying()).to.be.equal(totalUnderlying + depositAmount);
-        expect(await StakedIPContract.balanceOf(alice.address)).to.be.equal(expectedIncrement);
-      });
-
-      it("[T129] deposit() - Deposit wIP tokens with price 1:1", async function () {
-        const {
-          StakedIPContract,
-          alice,
-          WIPContract
-        } = await loadFixture(fixture);
-
-        const totalSupply = await StakedIPContract.totalSupply(),
-          totalUnderlying = await StakedIPContract.totalUnderlying(),
-          depositAmount = ethers.parseEther("5");
-
-        await WIPContract.connect(alice).deposit({ value: depositAmount });
-
-        await WIPContract.connect(alice).approve(StakedIPContract.target, depositAmount);
-        await StakedIPContract.connect(alice).deposit(depositAmount, alice.address);
-
-        expect(await StakedIPContract.totalSupply()).to.be.equal(totalSupply + depositAmount);
-        expect(await StakedIPContract.totalUnderlying()).to.be.equal(totalUnderlying + depositAmount);
-        expect(await StakedIPContract.balanceOf(alice.address)).to.be.equal(depositAmount);
-      });
-
-      it("[T130] deposit() - Deposit wIP tokens with price 1:2", async function () {
-        const {
-          StakedIPContract,
-          operator,
-          alice,
-          WIPContract
-        } = await loadFixture(fixture);
-
-        const totalSupply = await StakedIPContract.totalSupply(),
-          totalUnderlyingBefore = await StakedIPContract.totalUnderlying(),
-          depositAmount = ethers.parseEther("5");
-
-        await StakedIPContract.connect(operator).injectRewards({ value: totalUnderlyingBefore });
-
         const totalUnderlying = await StakedIPContract.totalUnderlying()
+        const totalSupply = await StakedIPContract.totalSupply()
+        const balance = await StakedIPContract.balanceOf(alice.address)
+        const redeemAmount = balance / 2n;
 
-        await WIPContract.connect(alice).deposit({ value: depositAmount });
+        const expectedAssetsOut = await StakedIPContract.previewRedeem(redeemAmount);
+        await StakedIPContract.connect(alice).redeem(redeemAmount, alice.address, alice.address);
 
-        await WIPContract.connect(alice).approve(StakedIPContract.target, depositAmount);
-        await StakedIPContract.connect(alice).deposit(depositAmount, alice.address);
+        expect(await StakedIPContract.totalSupply()).to.be.equal(totalSupply - redeemAmount);
 
-        expect(await StakedIPContract.totalSupply()).to.be.equal(totalSupply + (depositAmount / 2n));
-        expect(await StakedIPContract.totalUnderlying()).to.be.equal(totalUnderlying + depositAmount);
-        expect(await StakedIPContract.balanceOf(alice.address)).to.be.equal(depositAmount / 2n);
-      });
+        expect(await StakedIPContract.totalUnderlying()).to.be.equal(totalUnderlying - expectedAssetsOut);
 
-      it("[T131] deposit() - Deposit wIP tokens with price 1:0.95", async function () {
-        const {
-          StakedIPContract,
-          owner,
-          operator,
-          alice,
-          WIPContract
-        } = await loadFixture(fixture);
-
-        const totalSupply = await StakedIPContract.totalSupply(),
-          totalUnderlyingBefore = await StakedIPContract.totalUnderlying(),
-          depositAmount = ethers.parseEther("5");
-
-        await StakedIPContract.connect(owner).updateMaxSlashPercent(500);
-        await StakedIPContract.connect(operator).reportSlash(getPercentage(totalUnderlyingBefore, 0.05), DUMMY_VALIDATOR_SET[0].publicKey);
-
-        const totalUnderlying = await StakedIPContract.totalUnderlying()
-
-        await WIPContract.connect(alice).deposit({ value: depositAmount });
-
-        await WIPContract.connect(alice).approve(StakedIPContract.target, depositAmount);
-        await StakedIPContract.connect(alice).deposit(depositAmount, alice.address);
-
-        const stIPPrice = await StakedIPContract.getStIPPrice()
-
-        const expectedIncrement = depositAmount * BigInt(1e18) / stIPPrice;
-
-        expect(await StakedIPContract.totalSupply()).to.be.equal(totalSupply + expectedIncrement);
-        expect(await StakedIPContract.totalUnderlying()).to.be.equal(totalUnderlying + depositAmount);
-        expect(await StakedIPContract.balanceOf(alice.address)).to.be.equal(expectedIncrement);
+        expect(await StakedIPContract.balanceOf(alice.address)).to.be.equal(expectedSharesIn - redeemAmount);
       });
     });
-  });
+
+    describe("Complete withdrawal", function () {
+      it("[T134] completeWithdraw() - completeWithdraw with price 1:1", async function () {
+        const {
+          StakedIPContract,
+          alice,
+          WithdrawalContract
+        } = await loadFixture(fixture);
+
+        const depositAmount = ethers.parseEther("5");
+
+        await StakedIPContract.connect(alice).depositIP(alice.address, { value: depositAmount });
+
+        const redeemAmount = ethers.parseEther("2");
+
+        await StakedIPContract.connect(alice).redeem(redeemAmount, alice.address, alice.address);
+
+        const balance = await StakedIPContract.balanceOf(alice.address)
+
+        const userPendingWithdrawals = await WithdrawalContract.getUserPendingWithdrawals(alice.address);
+        const activeWithdrawals = userPendingWithdrawals[0]
+
+        await setBalance(WithdrawalContract.target, activeWithdrawals.amount);
+        await time.increaseTo(activeWithdrawals.unlockTimestamp);
+
+        const nativeBalanceBefore = await ethers.provider.getBalance(alice.address);
+        const tx = await WithdrawalContract.connect(alice).completeWithdraw(0, false);
+        const gasCost = await txGasCost(tx);
+        const pendingWithdrawalSlot = await WithdrawalContract.getUserPendingWithdrawals(alice.address).then(p => p[0]);
+
+        expect(await ethers.provider.getBalance(alice.address)).to.be.equal(nativeBalanceBefore + activeWithdrawals.amount - gasCost);
+        expect(pendingWithdrawalSlot.amount).to.be.equal(0);
+        expect(pendingWithdrawalSlot.unlockTimestamp).to.be.equal(0);
+        expect(pendingWithdrawalSlot.receiver).to.be.equal(ethers.ZeroAddress);
+      });
+
+      it("[T135] completeWithdraw() - completeWithdraw with price 1:1 as wIP", async function () {
+        const {
+          StakedIPContract,
+          alice,
+          WithdrawalContract,
+          WIPContract
+        } = await loadFixture(fixture);
+
+        const depositAmount = ethers.parseEther("5");
+
+        await WIPContract.connect(alice).deposit({ value: depositAmount });
+
+        await WIPContract.connect(alice).approve(StakedIPContract.target, depositAmount);
+        await StakedIPContract.connect(alice).deposit(depositAmount, alice.address);
+
+        const redeemAmount = ethers.parseEther("2");
+
+        await StakedIPContract.connect(alice).redeem(redeemAmount, alice.address, alice.address);
+
+        const balance = await StakedIPContract.balanceOf(alice.address)
+
+        const userPendingWithdrawals = await WithdrawalContract.getUserPendingWithdrawals(alice.address);
+        const activeWithdrawals = userPendingWithdrawals[0]
+
+        await setBalance(WithdrawalContract.target, activeWithdrawals.amount);
+        await time.increaseTo(activeWithdrawals.unlockTimestamp);
+
+        await WithdrawalContract.connect(alice).completeWithdraw(0, true);
+        const pendingWithdrawalSlot = await WithdrawalContract.getUserPendingWithdrawals(alice.address).then(p => p[0]);
+
+        // expect(await ethers.provider.getBalance(alice.address)).to.be.equal(nativeBalanceBefore + activeWithdrawals.amount - gasCost);
+        expect(await WIPContract.balanceOf(alice.address)).to.be.equal(activeWithdrawals.amount);
+        expect(pendingWithdrawalSlot.amount).to.be.equal(0);
+        expect(pendingWithdrawalSlot.unlockTimestamp).to.be.equal(0);
+        expect(pendingWithdrawalSlot.receiver).to.be.equal(ethers.ZeroAddress);
+      });
+
+      it("[T136] coverWithdrawals() - cover withdraw with price 1:1", async function () {
+        const {
+          StakedIPContract,
+          alice,
+          WithdrawalContract,
+          operator
+        } = await loadFixture(fixture);
+
+        const depositAmount = ethers.parseEther("5");
+
+        await StakedIPContract.connect(alice).depositIP(alice.address, { value: depositAmount });
+
+        const redeemAmount = ethers.parseEther("2");
+
+        await StakedIPContract.connect(alice).redeem(redeemAmount, alice.address, alice.address);
+
+        const userPendingWithdrawals = await WithdrawalContract.getUserPendingWithdrawals(alice.address);
+        const activeWithdrawals = userPendingWithdrawals[0]
+
+        await StakedIPContract.connect(operator).coverWithdrawals(activeWithdrawals.amount);
+        await time.increaseTo(activeWithdrawals.unlockTimestamp);
+
+        const nativeBalanceBefore = await ethers.provider.getBalance(alice.address);
+        const tx = await WithdrawalContract.connect(alice).completeWithdraw(0, false);
+        const gasCost = await txGasCost(tx)
+        const pendingWithdrawalSlot = await WithdrawalContract.getUserPendingWithdrawals(alice.address).then(p => p[0]);
+
+        expect(await ethers.provider.getBalance(alice.address)).to.be.equal(nativeBalanceBefore + activeWithdrawals.amount - gasCost);
+        expect(pendingWithdrawalSlot.amount).to.be.equal(0);
+        expect(pendingWithdrawalSlot.unlockTimestamp).to.be.equal(0);
+        expect(pendingWithdrawalSlot.receiver).to.be.equal(ethers.ZeroAddress);
+      });
+    });
+  })
 });
