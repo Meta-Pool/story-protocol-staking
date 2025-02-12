@@ -5,7 +5,7 @@ const getBlockNumber = async () => ethers.provider.getBlockNumber()
 
 const getNativeBalance = async (address) => new BigNumber(await ethers.provider.getBalance(address)).div(1e18)
 
-const getPercentage = (amount, percentage) => amount * BigInt(percentage * 100) / 10000n
+const getPercentage = (amount, percentage) => amount * BigInt(percentage * 10000) / 10000n
 
 const contract = async (address, name) => {
     try {

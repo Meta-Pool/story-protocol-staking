@@ -1,7 +1,7 @@
 const { ethers, upgrades } = require("hardhat");
-const { WRAPPED_NATIVE } = require("../constants");
-const { contract } = require("./utils");
-const { FORK_CHAIN } = require("../scripts/env");
+const { WRAPPED_NATIVE } = require("../../constants");
+const { contract } = require("../utils");
+const { FORK_CHAIN } = require("../../scripts/env");
 
 const ONE_DAY_SECONDS = BigInt(24 * 60 * 60);
 const MLARGE = ethers.parseEther("100000000");
@@ -77,13 +77,13 @@ const DUMMY_VALIDATOR_SET = [
 ];
 
 async function deployStoryPoolFixture() {
-
-  // Get the ContractFactory and Signers here.
-  const WIP = await ethers.getContractFactory("WIP");
-  const RewardsManager = await ethers.getContractFactory("RewardsManager");
-  const StakedIP = await ethers.getContractFactory("StakedIP");
-  const Withdrawal = await ethers.getContractFactory("Withdrawal");
-  const IPTokenStaking = await ethers.getContractFactory("IPTokenStaking");
+  const [WIP, RewardsManager, StakedIP, Withdrawal, IPTokenStaking] = await Promise.all([
+    ethers.getContractFactory("WIP"),
+    ethers.getContractFactory("RewardsManager"),
+    ethers.getContractFactory("StakedIP"),
+    ethers.getContractFactory("Withdrawal"),
+    ethers.getContractFactory("IPTokenStaking"),
+  ]);
 
   const [
     deployer,
@@ -103,13 +103,6 @@ async function deployStoryPoolFixture() {
     await WIPContract.waitForDeployment();
   }
 
-  // struct InitializerArgs {
-  //     address owner;
-  //     uint256 minStakeAmount;
-  //     uint256 minUnstakeAmount;
-  //     uint256 minCommissionRate;
-  //     uint256 fee;
-  // }
   const initializerArgs = [
     owner.address,
     ethers.parseUnits("1024", 18),
@@ -122,7 +115,7 @@ async function deployStoryPoolFixture() {
     [initializerArgs],
     {
       initializer: "initialize",
-      unsafeAllow: ["constructor", "state-variable-immutable"],
+      unsafeAllow: ["state-variable-immutable"],
       constructorArgs: [ethers.parseUnits("1", 18), 200n]
     }
   );
@@ -133,82 +126,40 @@ async function deployStoryPoolFixture() {
   const StakedIPContract = await upgrades.deployProxy(
     StakedIP,
     [
-      // address _operator,
+      owner.address,
       operator.address,
-      // IIPTokenStaking _ipTokenStaking,
       IPTokenStakingContract.target,
-      // IERC20 _asset,
       WIPContract.target,
-      // string memory _stIPName,
       "Staked IP Token",
-      // string memory _stIPSymbol,
       "stIP",
-      // uint256 _minDepositAmount,
       ethers.parseUnits("1", 18),
-      // bytes[] calldata _validatorsPubkey,
       [
         DUMMY_VALIDATOR_SET[0].publicKey,
         DUMMY_VALIDATOR_SET[1].publicKey,
         DUMMY_VALIDATOR_SET[2].publicKey
       ],
-      // uint16[] calldata _validatorsStakePercent
       [2000, 3000, 5000],
     ],
     {
       initializer: "initialize",
-      unsafeAllow: ["constructor"]
     }
   );
   await StakedIPContract.waitForDeployment();
 
-  const RewardsManagerContract = await RewardsManager.deploy(
-    // address _owner,
-    owner.address,
-    // address _stakedIP,
-    StakedIPContract.target,
-    // address _treasury,
-    treasury.address,
-    // uint256 _rewardsFeeBp
-    500n
-  );
-  await RewardsManagerContract.waitForDeployment();
+  const [RewardsManagerContract, WithdrawalContract] = await Promise.all([
+    RewardsManager.deploy(owner.address, StakedIPContract.target, treasury.address, 500n)
+      .then((contract) => contract.waitForDeployment()),
 
-  const WithdrawalContract = await upgrades.deployProxy(
-    Withdrawal,
-    [
-      // address _owner,
-      owner.address,
-      // address _operator,
-      operator.address,
-      // address payable _stIP,
-      StakedIPContract.target,
-    ],
-    {
-      initializer: "initialize",
-      unsafeAllow: ["constructor"]
-    }
-  );
-  await WithdrawalContract.waitForDeployment();
+    upgrades.deployProxy(
+      Withdrawal,
+      [owner.address, operator.address, StakedIPContract.target],
+      { initializer: "initialize" }
+    ).then((contract) => contract.waitForDeployment()),
+  ]);
 
-  await StakedIPContract.setupStaking(
-    // address _owner,
-    owner.address,
-    // address _withdrawal,
-    WithdrawalContract.target,
-    // address _rewardsManager,
-    RewardsManagerContract.target,
-    // bytes calldata _validatorUncmpPubkey,
-    DUMMY_VALIDATOR_SET[0].publicKey,
-    // IIPTokenStaking.StakingPeriod _period
-    0,
-    { value: FEE + FEE + (await IPTokenStakingContract.minStakeAmount()) }
-  );
+  await StakedIPContract.depositIP(deployer.address, { value: ethers.parseUnits("5", 18) });
 
-  await StakedIPContract.connect(owner).acceptOwnership();
-
-  // todo: will the initial deposit be at initialization?
-  // await StakedIPContract.updateRewardsManager(RewardsManagerContract.target, { value: FEE });
-  // await StakedIPContract.updateWithdrawal(WithdrawalContract.target, { value: FEE });
+  await StakedIPContract.connect(owner).updateWithdrawal(WithdrawalContract.target, { value: FEE });
 
   return {
     IPTokenStakingContract,
@@ -216,9 +167,7 @@ async function deployStoryPoolFixture() {
     StakedIPContract,
     WIPContract,
     WithdrawalContract,
-
     FEE,
-
     owner,
     operator,
     treasury,
