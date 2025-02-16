@@ -60,6 +60,11 @@ contract RewardsManager is IRewardsManager, Ownable2Step, ReentrancyGuard {
     }
 
     function updateRewardsFee(uint256 _rewardsFeeBp) external onlyOwner checkRewards(_rewardsFeeBp) {
+        (uint256 rewards, ) = getManagerAccrued();
+        if (rewards > 0) {
+            sendRewardsAndFees();
+        }
+
         rewardsFeeBp = _rewardsFeeBp;
 
         emit UpdateRewardsFee(msg.sender, _rewardsFeeBp);
@@ -75,7 +80,7 @@ contract RewardsManager is IRewardsManager, Ownable2Step, ReentrancyGuard {
 
     /// @notice Send rewards to stIP and claim fees to treasury
     /// @dev Technically safe to be called by anyone
-    function sendRewardsAndFees() external nonReentrant {
+    function sendRewardsAndFees() public nonReentrant {
         (uint256 rewards, uint256 treasuryFee) = getManagerAccrued();
         require(rewards > 0, NoRewards());
 
