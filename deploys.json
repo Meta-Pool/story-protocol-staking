@@ -1,0 +1,16 @@
+{
+  "story_mainnet": {
+    "StakedIPProxy": "0xd07Faed671decf3C5A6cc038dAD97c8EFDb507c0",
+    "StakedIPFunctionsOwner": "0xf1552d1d7CD279A7B766F431c5FaC49A2fb6e361",
+    "StakedIPImpl": "0x7d0378Fc2eaF6E266369466D05AD2B4808a65ccE",
+    "StakedIPProxyAdmin": "0x86af03287A23868d8bB805Dd8931ABB296553A48",
+    "StakedIPUpgradesOwner": "0xf1552d1d7CD279A7B766F431c5FaC49A2fb6e361",
+    "RewardsManager": "0xe66F876EaeBd29cfE36737458A1B784A135F0437",
+    "RewardsManagerFunctionsOwner": "0xf1552d1d7CD279A7B766F431c5FaC49A2fb6e361",
+    "WithdrawalProxy": "0x9D527A65E6db07Bf5Bd219C5712B85a6ABB65a33",
+    "WithdrawalFunctionsOwner": "0xf1552d1d7CD279A7B766F431c5FaC49A2fb6e361",
+    "WithdrawalImpl": "0xEB39EC594d9cbCf2C11626eEE25BD2c885794e8d",
+    "WithdrawalProxyAdmin": "0x94f2D32194EcE367AEC7E2BC282C321c072509C8",
+    "WithdrawalUpgradesOwner": "0xf1552d1d7CD279A7B766F431c5FaC49A2fb6e361"
+  }
+}

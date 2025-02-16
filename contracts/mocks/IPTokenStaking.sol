@@ -45,6 +45,7 @@ contract IPTokenStaking is IIPTokenStaking, Ownable2StepUpgradeable, ReentrancyG
         _;
     }
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint256 defaultMinFee, uint256 maxDataLength) {
         require(defaultMinFee >= 1 gwei, "IPTokenStaking: Invalid default min fee");
         DEFAULT_MIN_FEE = defaultMinFee;
