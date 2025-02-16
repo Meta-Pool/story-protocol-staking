@@ -110,6 +110,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     error ReportSlashTimelock(uint256 _unlockTime);
     error InvalidMaxSlashPercent(uint16 _maxSlashPercent);
     error UsersHasPendingWithdrawals();
+    error AmountExceedsPendingWithdrawals(uint256 _requestedAmount, uint256 _pendingWithdrawals);
 
     modifier onlyFullyOperational() {
         require(fullyOperational, NotFullyOperational());
@@ -299,6 +300,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
 
     /// @dev If there are pending withdrawals, new deposits will be used to cover them to avoid unstaking
     function coverWithdrawals(uint256 _assets) external onlyOperator {
+        uint256 totalPendingWithdrawals = IWithdrawal(withdrawal).totalPendingWithdrawals();
+        require(_assets <= totalPendingWithdrawals, AmountExceedsPendingWithdrawals(_assets, totalPendingWithdrawals));
         payable(withdrawal).sendValue(_assets);
         emit CoverWithdrawals(msg.sender, _assets);
     }
