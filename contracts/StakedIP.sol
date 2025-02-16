@@ -109,6 +109,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     error MaxSlashAmountExceeded(uint256 _maxAmount, uint256 _reportedAmount);
     error ReportSlashTimelock(uint256 _unlockTime);
     error InvalidMaxSlashPercent(uint16 _maxSlashPercent);
+    error UsersHasPendingWithdrawals();
 
     modifier onlyFullyOperational() {
         require(fullyOperational, NotFullyOperational());
@@ -209,6 +210,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
 
     function updateWithdrawal(address _withdrawal) public payable onlyOwner checkStakingOperationsFee {
         require(_withdrawal != address(0), InvalidZeroAddress());
+        require(withdrawal == address(0) || IWithdrawal(withdrawal).totalPendingWithdrawals() == 0, UsersHasPendingWithdrawals());
         withdrawal = _withdrawal;
         ipTokenStaking.setWithdrawalAddress{ value: msg.value }(_withdrawal);
 
