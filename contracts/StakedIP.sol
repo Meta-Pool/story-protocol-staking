@@ -68,6 +68,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
 
     mapping(address => bool) private _rewarderWhitlisted;
 
+    mapping(bytes32 => uint256) private _validatorStake;
+
     /// *******************
     /// * Events & errors *
     /// *******************
@@ -88,7 +90,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     event UpdateMaxSlashPercent(address _caller, uint16 _newMaxSlashPercent);
 
     error ArraySizeMismatch();
-    error HasStaking();
+    error ValidatorHasStaking(bytes _validator);
     error InvalidDepositSender(address _caller);
     error InvalidIPFee();
     error InvalidZeroAddress();
@@ -111,6 +113,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     error InvalidMaxSlashPercent(uint16 _maxSlashPercent);
     error UsersHasPendingWithdrawals();
     error AmountExceedsPendingWithdrawals(uint256 _requestedAmount, uint256 _pendingWithdrawals);
+    error InvalidUnstake(uint256 _remainingStake);
+    error InvalidRedelegate(uint256 _remainingStake);
 
     modifier onlyFullyOperational() {
         require(fullyOperational, NotFullyOperational());
@@ -143,17 +147,17 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
         _;
     }
 
-    modifier checkDuplicatedValidator(bytes memory _validatorCmpPubkey) {
+    modifier checkDuplicatedValidator(bytes calldata _validatorCmpPubkey) {
         require(!isValidatorListed(_validatorCmpPubkey), ValidatorAlreadyListed(_validatorCmpPubkey));
         _;
     }
 
-    modifier checkValidSlash(uint256 _amount) {
+    modifier checkValidSlash(bytes calldata _validatorCmpPubkey, uint256 _amount) {
         uint256 unlockTime = slashReportTimelock;
         require(block.timestamp >= unlockTime, ReportSlashTimelock(unlockTime));
         slashReportTimelock = block.timestamp + SLASH_REPORT_TIMELOCK;
 
-        uint256 maxSlashAmount = (totalUnderlying * maxSlashPercent) / ONE_HUNDRED;
+        uint256 maxSlashAmount = (_validatorStake[keccak256(_validatorCmpPubkey)] * maxSlashPercent) / ONE_HUNDRED;
         require(_amount <= maxSlashAmount, MaxSlashAmountExceeded(maxSlashAmount, _amount));
         _;
     }
@@ -262,14 +266,14 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
 
     /// @notice Delete validators in bulk
     /// @dev The validators must have zero target percent. Call updateValidatorsTarget() before
-    function bulkRemoveValidators(bytes[] memory _validatorsCmpPubkey) external onlyOwner {
+    function bulkRemoveValidators(bytes[] calldata _validatorsCmpPubkey) external onlyOwner {
         for (uint256 i = 0; i < _validatorsCmpPubkey.length; ++i) {
             _removeValidator(_validatorsCmpPubkey[i]);
         }
     }
 
     /// @notice Insert validators in bul with zero target percent
-    function bulkInsertValidators(bytes[] memory _validatorsCmpPubkey) external onlyOwner {
+    function bulkInsertValidators(bytes[] calldata _validatorsCmpPubkey) external onlyOwner {
         for (uint256 i = 0; i < _validatorsCmpPubkey.length; ++i) {
             _insertValidator(_validatorsCmpPubkey[i]);
         }
@@ -282,13 +286,16 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
 
     /// @notice Replace one validator maintaining the target percent
     function replaceOneValidator(
-        bytes memory _oldValidatorCmpPubkey,
-        bytes memory _newValidatorCmpPubkey
-    ) external onlyOwner checkDuplicatedValidator(_newValidatorCmpPubkey) {
+        bytes calldata _oldValidatorCmpPubkey,
+        bytes calldata _newValidatorCmpPubkey
+    ) external onlyOwner checkValidatorExists(_oldValidatorCmpPubkey) checkDuplicatedValidator(_newValidatorCmpPubkey) {
+        bytes32 _oldValidatorPubkeyHash = keccak256(_oldValidatorCmpPubkey);
+        require(_validatorStake[_oldValidatorPubkeyHash] == 0, ValidatorHasStaking(_oldValidatorCmpPubkey));
+
         uint256 _index = getValidatorIndex(_oldValidatorCmpPubkey);
         _validators[_index].cmpPubkey = _newValidatorCmpPubkey;
 
-        _validatorExists[keccak256(_oldValidatorCmpPubkey)] = false;
+        _validatorExists[_oldValidatorPubkeyHash] = false;
         _validatorExists[keccak256(_newValidatorCmpPubkey)] = true;
 
         emit ReplaceValidator(_oldValidatorCmpPubkey, _newValidatorCmpPubkey);
@@ -324,6 +331,8 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
             _extraData
         );
 
+        _validatorStake[keccak256(_validatorCmpPubkey)] += _amount;
+
         emit Stake(msg.sender, _validatorCmpPubkey, delegation_id, _amount, _extraData);
     }
 
@@ -345,12 +354,18 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
         checkStakingOperationsFee
         checkValidatorExists(_validatorCmpPubkey)
     {
+        bytes32 validatorPubkeyHash = keccak256(_validatorCmpPubkey);
+        uint256 validatorStakeAfterUnstake = _validatorStake[validatorPubkeyHash] - _amount;
+        require(validatorStakeAfterUnstake >= 1024 || validatorStakeAfterUnstake == 0, InvalidUnstake(validatorStakeAfterUnstake));
+
         ipTokenStaking.unstake{ value: msg.value }(
             _validatorCmpPubkey,
             _delegation_id,
             _amount,
             _extraData
         );
+
+        _validatorStake[validatorPubkeyHash] = validatorStakeAfterUnstake;
 
         emit Unstake(msg.sender, _validatorCmpPubkey, _amount, _delegation_id, _extraData);
     }
@@ -371,14 +386,22 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
         onlyFullyOperational
         onlyOperator
         checkStakingOperationsFee
+        checkValidatorExists(_oldValidatorCmpPubkey)
         checkValidatorExists(_newValidatorCmpPubkey)
     {
+        bytes32 oldValidatorPubkeyHash = keccak256(_oldValidatorCmpPubkey);
+        uint256 oldValidatorRemainingStake = _validatorStake[oldValidatorPubkeyHash] - _amount;
+        require(oldValidatorRemainingStake >= 1024 || oldValidatorRemainingStake == 0, InvalidRedelegate(oldValidatorRemainingStake));
+
         ipTokenStaking.redelegate{ value: msg.value }(
             _oldValidatorCmpPubkey,
             _newValidatorCmpPubkey,
             _delegation_id,
             _amount
         );
+
+        _validatorStake[oldValidatorPubkeyHash] = oldValidatorRemainingStake;
+        _validatorStake[keccak256(_newValidatorCmpPubkey)] += _amount;
     }
 
     /// ******************
@@ -402,12 +425,16 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
         return _validators;
     }
 
-    function isValidatorListed(bytes memory _validatorCmpPubkey) public view returns (bool) {
+    function isValidatorListed(bytes calldata _validatorCmpPubkey) public view returns (bool) {
         return _validatorExists[keccak256(_validatorCmpPubkey)];
     }
 
     function isRewarderWhitelisted(address _rewarder) public view returns (bool) {
         return _rewarderWhitlisted[_rewarder];
+    }
+
+    function getValidatorStake(bytes calldata _validatorCmpPubkey) external view returns (uint256) {
+        return _validatorStake[keccak256(_validatorCmpPubkey)];
     }
 
     /// @notice Redistribute the total amount of IP into the target percent
@@ -440,9 +467,9 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     function getValidatorIndex(bytes memory _validatorCmpPubkey) public view returns (uint256) {
         Validator[MAX_VALIDATORS] memory validators = _validators;
 
-        bytes32 _validatorPubkeyHash = keccak256(_validatorCmpPubkey);
+        bytes32 validatorPubkeyHash = keccak256(_validatorCmpPubkey);
         for (uint256 i = 0; i < validatorsLength; ++i) {
-            if (keccak256(validators[i].cmpPubkey) == _validatorPubkeyHash) {
+            if (keccak256(validators[i].cmpPubkey) == validatorPubkeyHash) {
                 return i;
             }
         }
@@ -461,7 +488,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
         totalUnderlying += msg.value;
     }
 
-    function reportSlash(uint256 _amount, bytes calldata _validatorCmpPubkey) external onlyOperator checkValidSlash(_amount) checkValidatorExists(_validatorCmpPubkey) {
+    function reportSlash(uint256 _amount, bytes calldata _validatorCmpPubkey) external onlyOperator checkValidSlash(_validatorCmpPubkey, _amount) checkValidatorExists(_validatorCmpPubkey) {
         totalUnderlying -= _amount;
         emit ReportSlash(msg.sender, _amount, _validatorCmpPubkey);
     }
@@ -589,6 +616,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
         Validator memory validator = _validators[_index];
 
         require(validator.targetStakePercent == 0, ValidatorHasTargetPercent(validator));
+        require(_validatorStake[keccak256(_validatorCmpPubkey)] == 0, ValidatorHasStaking(_validatorCmpPubkey));
 
         if (_index != _validatorsLength - 1) {
             // Replace the element at the index with the last element in the array
@@ -606,7 +634,7 @@ contract StakedIP is Initializable, ERC4626Upgradeable, Ownable2StepUpgradeable,
     }
 
     function _insertValidator(
-        bytes memory _validatorCmpPubkey
+        bytes calldata _validatorCmpPubkey
     ) private checkDuplicatedValidator(_validatorCmpPubkey) {
         uint256 _validatorsLength = validatorsLength;
 

@@ -157,9 +157,14 @@ async function deployStoryPoolFixture() {
     ).then((contract) => contract.waitForDeployment()),
   ]);
 
-  await StakedIPContract.depositIP(deployer.address, { value: ethers.parseUnits("5", 18) });
+  const depositAmount = ethers.parseUnits("1024", 18);
+
+  await StakedIPContract.depositIP(deployer.address, { value: depositAmount });
+
+  await StakedIPContract.connect(operator).stake(DUMMY_VALIDATOR_SET[0].publicKey, depositAmount, 0, '0x');
 
   await StakedIPContract.connect(owner).updateWithdrawal(WithdrawalContract.target, { value: FEE });
+  await StakedIPContract.connect(owner).updateRewardsManager(RewardsManagerContract.target, { value: FEE });
 
   return {
     IPTokenStakingContract,

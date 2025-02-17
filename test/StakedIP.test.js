@@ -41,17 +41,15 @@ describe("Staked IP 🐍 - Stake IP tokens in Meta Pool ----", function () {
         expect(await StakedIPContract.fullyOperational()).to.be.equal(true);
 
         expect(await StakedIPContract.minDepositAmount()).to.be.equal(ethers.parseEther("1"));
-        expect(await StakedIPContract.totalUnderlying()).to.be.equal(ethers.parseUnits("5", 18));
+        expect(await StakedIPContract.totalUnderlying()).to.be.equal(ethers.parseUnits("1024", 18));
         expect(await StakedIPContract.ipTokenStaking()).to.be.equal(IPTokenStakingContract.target);
         expect(await StakedIPContract.operator()).to.be.equal(operator.address);
 
         expect(await StakedIPContract.asset()).to.be.equal(WIPContract.target);
-        expect(await StakedIPContract.totalSupply()).to.be.equal(ethers.parseUnits("5", 18));
-
-        // todo: will the initial deposit be at initialization?
-        // expect(await StakedIPContract.rewardsManager()).to.be.equal(RewardsManagerContract.target);
-        // expect(await StakedIPContract.withdrawal()).to.be.equal(WithdrawalContract.target);
-        // expect(await StakedIPContract.totalAssets()).to.be.equal(0);
+        expect(await StakedIPContract.totalSupply()).to.be.equal(ethers.parseUnits("1024", 18));
+        expect(await StakedIPContract.totalAssets()).to.be.equal(ethers.parseUnits("1024", 18));
+        expect(await StakedIPContract.rewardsManager()).to.be.equal(RewardsManagerContract.target);
+        expect(await StakedIPContract.withdrawal()).to.be.equal(WithdrawalContract.target);
       });
 
       it(`[T101]-${index + 1} RewardsManagerContract initial parameters are correct.`, async function () {
