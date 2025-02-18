@@ -30,13 +30,9 @@ module.exports = {
       accounts: { mnemonic: MNEMONIC },
       forking,
     },
-    testnet: {
-      url: RPC_URL || "https://rpc.odyssey.storyrpc.io/",
-      accounts: { mnemonic: MNEMONIC },
-    },
     mainnet: {
       url: RPC_URL,
-      accounts: { mnemonic: MNEMONIC },
+      accounts: [process.env.OWNER_PRIVATE_KEY]
     },
   },
   solidity: {
