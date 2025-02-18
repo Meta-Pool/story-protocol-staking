@@ -16,7 +16,7 @@ const forking = {
   enabled: FORK_CHAIN,
 }
 
-if (BLOCK_NUMBER) 
+if (BLOCK_NUMBER)
   forking.blockNumber = BLOCK_NUMBER
 
 module.exports = {
@@ -30,10 +30,25 @@ module.exports = {
       accounts: { mnemonic: MNEMONIC },
       forking,
     },
-    mainnet: {
+    story_mainnet: {
       url: RPC_URL,
       accounts: [process.env.OWNER_PRIVATE_KEY]
     },
+  },
+  etherscan: {
+    apiKey: {
+      story_mainnet: process.env.STORYSCAN_API_KEY
+    },
+    customChains: [
+      {
+        network: "story_mainnet",
+        chainId: 1514,
+        urls: {
+          apiURL: "https://www.storyscan.xyz/api",
+          browserURL: "https://www.storyscan.xyz/"
+        }
+      }
+    ]
   },
   solidity: {
     version: '0.8.28',
