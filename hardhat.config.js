@@ -9,6 +9,7 @@ const {
 require('@nomicfoundation/hardhat-toolbox')
 require('@openzeppelin/hardhat-upgrades')
 require("hardhat-contract-sizer");
+require("./tasks/inject_rewards");
 
 const forking = {
   url: RPC_URL,
