@@ -1,15 +1,13 @@
 const { ethers, upgrades } = require("hardhat");
 
 async function main() {
-    const provider = ethers.provider
     const [owner] = await ethers.getSigners();
 
     const PROXY_ADDRESS = "0xd07Faed671decf3C5A6cc038dAD97c8EFDb507c0";
 
     const NewStakedIP = await ethers.getContractFactory("StakedIP", owner);
 
-    const newImplAddress = await upgrades.prepareUpgrade(PROXY_ADDRESS, NewStakedIP);
-    console.log("New implementation deployed at:", newImplAddress);
+    await upgrades.forceImport(PROXY_ADDRESS, NewStakedIP);
 
     console.log("Deploying new implementation and upgrading proxy for StakedIP");
 
