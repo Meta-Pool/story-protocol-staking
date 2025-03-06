@@ -26,8 +26,14 @@ const forking = {
   enabled: FORK_CHAIN,
 }
 
-if (BLOCK_NUMBER)
+if (BLOCK_NUMBER) {
   forking.blockNumber = BLOCK_NUMBER
+}
+
+let privateKey = process.env.OWNER_PRIVATE_KEY
+if (!privateKey && process.env.PRIVATE_KEY_FILE) {
+  privateKey = fs.readFileSync(resolveHome(process.env.PRIVATE_KEY_FILE), 'utf8').toString().trim()
+}
 
 let privateKey = process.env.OWNER_PRIVATE_KEY
 if (!privateKey && process.env.PRIVATE_KEY_FILE) {
