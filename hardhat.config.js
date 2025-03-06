@@ -9,7 +9,6 @@ const {
 require('@nomicfoundation/hardhat-toolbox')
 require('@openzeppelin/hardhat-upgrades')
 require("hardhat-contract-sizer");
-require("./tasks/inject_rewards");
 
 const os = require('os')
 const fs = require('fs')
@@ -28,11 +27,6 @@ const forking = {
 
 if (BLOCK_NUMBER) {
   forking.blockNumber = BLOCK_NUMBER
-}
-
-let privateKey = process.env.OWNER_PRIVATE_KEY
-if (!privateKey && process.env.PRIVATE_KEY_FILE) {
-  privateKey = fs.readFileSync(resolveHome(process.env.PRIVATE_KEY_FILE), 'utf8').toString().trim()
 }
 
 let privateKey = process.env.OWNER_PRIVATE_KEY
