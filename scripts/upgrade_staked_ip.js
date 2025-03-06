@@ -1,3 +1,4 @@
+const { Wallet } = require("ethers");
 const { ethers, upgrades } = require("hardhat");
 
 async function main() {
