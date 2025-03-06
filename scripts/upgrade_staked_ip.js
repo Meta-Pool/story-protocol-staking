@@ -3,7 +3,7 @@ const { ethers, upgrades } = require("hardhat");
 
 async function main() {
     const provider = ethers.provider
-    const owner = new Wallet(process.env.OWNER_PRIVATE_KEY, provider);
+    const [owner] = await ethers.getSigners();
 
     const PROXY_ADDRESS = "0xd07Faed671decf3C5A6cc038dAD97c8EFDb507c0";
 

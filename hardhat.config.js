@@ -11,6 +11,16 @@ require('@openzeppelin/hardhat-upgrades')
 require("hardhat-contract-sizer");
 require("./tasks/inject_rewards");
 
+const os = require('os')
+const fs = require('fs')
+const path = require('path')
+function resolveHome(filepath) {
+  if (filepath[0] === '~') {
+    return path.join(os.homedir(), filepath.slice(1));
+  }
+  return path.resolve(filepath);
+}
+
 const forking = {
   url: RPC_URL,
   enabled: FORK_CHAIN,
@@ -18,6 +28,11 @@ const forking = {
 
 if (BLOCK_NUMBER)
   forking.blockNumber = BLOCK_NUMBER
+
+let privateKey = process.env.OWNER_PRIVATE_KEY
+if (!privateKey && process.env.PRIVATE_KEY_FILE) {
+  privateKey = fs.readFileSync(resolveHome(process.env.PRIVATE_KEY_FILE), 'utf8').toString().trim()
+}
 
 module.exports = {
   defaultNetwork: 'hardhat',
@@ -32,7 +47,7 @@ module.exports = {
     },
     story_mainnet: {
       url: RPC_URL,
-      accounts: [process.env.OWNER_PRIVATE_KEY]
+      accounts: [privateKey]
     },
   },
   etherscan: {
