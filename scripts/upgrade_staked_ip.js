@@ -9,9 +9,10 @@ async function main() {
 
     console.log("Deploying new implementation and upgrading proxy for StakedIP");
 
-    await upgrades.upgradeProxy(PROXY_ADDRESS, NewStakedIP, { signer: owner });
+    const upgraded = await upgrades.upgradeProxy(PROXY_ADDRESS, NewStakedIP, { signer: owner });
 
-    console.log(`Proxy upgraded successfully. New implementation at: ${await upgrades.erc1967.getImplementationAddress(PROXY_ADDRESS)}`);
+    //console.log(`Proxy upgraded successfully. New implementation at: ${await upgrades.erc1967.getImplementationAddress(PROXY_ADDRESS)}`);
+    console.log("Upgraded to:", upgraded.address);
 }
 
 main()
