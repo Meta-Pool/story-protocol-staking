@@ -7,8 +7,6 @@ async function main() {
 
     const NewStakedIP = await ethers.getContractFactory("StakedIP", owner);
 
-    await upgrades.forceImport(PROXY_ADDRESS, NewStakedIP);
-
     console.log("Deploying new implementation and upgrading proxy for StakedIP");
 
     await upgrades.upgradeProxy(PROXY_ADDRESS, NewStakedIP, { signer: owner });
